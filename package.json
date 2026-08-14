@@ -1,0 +1,24 @@
+{
+  "name": "capitalflow-mvp",
+  "private": true,
+  "version": "0.1.0",
+  "description": "PWA + Android personal finance tracker with notification/email ingestion and Whop subscriptions.",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "npm run dev -w @capitalflow/web",
+    "build": "npm run build -w @capitalflow/core && npm run build -w @capitalflow/web",
+    "test": "npm run test -w @capitalflow/core && npm run test:edge-parser",
+    "test:native": "bash scripts/test-android-parser.sh",
+    "test:all": "npm test && npm run test:native",
+    "typecheck": "npm run typecheck -w @capitalflow/core && npm run typecheck -w @capitalflow/web",
+    "clean": "npm run clean -w @capitalflow/core && npm run clean -w @capitalflow/web",
+    "test:edge-parser": "node --experimental-strip-types --test supabase/functions/_shared/*.test.ts"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "type": "module"
+}

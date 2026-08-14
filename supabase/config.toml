@@ -1,0 +1,35 @@
+project_id = "capitalflow-mvp"
+
+[api]
+enabled = true
+# Edge Functions use the service role against internal tables. Keep all grants to
+# anon/authenticated revoked for the private schema as defined by the migration.
+extra_search_path = ["public", "extensions"]
+schemas = ["public", "storage", "graphql_public", "private"]
+
+[functions.whop-webhook]
+verify_jwt = false
+
+[functions.gmail-oauth-callback]
+verify_jwt = false
+
+[functions.gmail-pubsub-webhook]
+verify_jwt = false
+
+[functions.outlook-oauth-callback]
+verify_jwt = false
+
+[functions.outlook-webhook]
+verify_jwt = false
+
+[functions.renew-mail-watches]
+verify_jwt = false
+
+[functions.mail-sync-worker]
+verify_jwt = false
+
+[functions.storage-oauth-callback]
+verify_jwt = false
+
+[functions.cloud-backup-worker]
+verify_jwt = false

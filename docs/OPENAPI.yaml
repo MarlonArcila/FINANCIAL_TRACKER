@@ -1,0 +1,335 @@
+openapi: 3.1.0
+info:
+  title: CapitalFlow Edge API
+  version: 0.1.0
+  description: Sensitive operations that are not handled directly by the Supabase Data API.
+servers:
+  - url: https://{project}.supabase.co/functions/v1
+    variables:
+      project:
+        default: YOUR_PROJECT
+security:
+  - bearerAuth: []
+paths:
+  /whop-checkout:
+    post:
+      summary: Create an approved weekly or annual Whop checkout.
+      operationId: createWhopCheckout
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [interval]
+              properties:
+                interval:
+                  type: string
+                  enum: [weekly, annual]
+      responses:
+        "200":
+          description: Checkout created
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [purchaseUrl]
+                properties:
+                  purchaseUrl: { type: string, format: uri }
+        "401": { description: Unauthenticated }
+        "422": { description: Invalid plan }
+  /notification-ingest:
+    post:
+      summary: Ingest sanitized Android candidates.
+      operationId: ingestAndroidCandidates
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [candidates]
+              properties:
+                candidates:
+                  type: array
+                  maxItems: 100
+                  items:
+                    $ref: "#/components/schemas/DetectedCandidate"
+      responses:
+        "200":
+          description: Batch result
+  /transaction-confirm:
+    post:
+      summary: Accept or reject a transaction candidate.
+      operationId: confirmTransactionCandidate
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - type: object
+                  required: [candidateId, action, accountId]
+                  properties:
+                    candidateId: { type: string, format: uuid }
+                    action: { const: accept }
+                    accountId: { type: string, format: uuid }
+                    categoryId: { type: [string, "null"], format: uuid }
+                    corrections: { type: object, additionalProperties: true }
+                - type: object
+                  required: [candidateId, action]
+                  properties:
+                    candidateId: { type: string, format: uuid }
+                    action: { type: string, enum: [reject, duplicate] }
+      responses:
+        "200": { description: Candidate updated }
+  /gmail-oauth-start:
+    post:
+      summary: Return a Gmail authorization URL.
+      operationId: startGmailOAuth
+      responses:
+        "200":
+          description: Authorization URL
+  /gmail-sync:
+    post:
+      summary: Synchronize a Gmail connection.
+      operationId: syncGmail
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                connectionId: { type: string, format: uuid }
+      responses:
+        "200": { description: Synchronization result }
+  /outlook-oauth-start:
+    post:
+      summary: Return a Microsoft authorization URL.
+      operationId: startOutlookOAuth
+      responses:
+        "200": { description: Authorization URL }
+  /outlook-sync:
+    post:
+      summary: Synchronize an Outlook connection using delta.
+      operationId: syncOutlook
+      responses:
+        "200": { description: Synchronization result }
+  /ai-advisor:
+    post:
+      summary: Explain an already calculated deterministic allocation plan.
+      operationId: explainAllocation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [plan]
+              properties:
+                plan:
+                  $ref: "#/components/schemas/AllocationPlan"
+      responses:
+        "200":
+          description: Explanation or deterministic fallback
+  /import-transactions:
+    post:
+      summary: Import normalized financial rows from CSV/Excel/JSON. Available to weekly and annual plans.
+      operationId: importTransactions
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [defaultAccountId, rows]
+              properties:
+                importId: { type: string, format: uuid }
+                filename: { type: string }
+                fileType: { type: string, enum: [csv, tsv, txt, xlsx, xls, json] }
+                fileSha256: { type: string, minLength: 64, maxLength: 64 }
+                sourceApp: { type: [string, "null"] }
+                defaultAccountId: { type: string, format: uuid }
+                createMissingCategories: { type: boolean }
+                finalChunk: { type: boolean }
+                rows:
+                  type: array
+                  minItems: 1
+                  maxItems: 400
+                  items: { $ref: "#/components/schemas/ImportRow" }
+      responses:
+        "200": { description: Import chunk result }
+        "402": { description: Active weekly or annual subscription required }
+  /account-manage:
+    post:
+      summary: Create, archive, or restore tracking accounts with plan enforcement.
+      operationId: manageAccount
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - type: object
+                  required: [action, name, type, currency, openingBalanceMinor]
+                  properties:
+                    action: { const: create }
+                    name: { type: string, minLength: 1, maxLength: 80 }
+                    type: { type: string, enum: [cash, checking, savings, credit, investment, other] }
+                    currency: { type: string, pattern: '^[A-Z]{3}$' }
+                    openingBalanceMinor: { type: integer }
+                    purpose: { type: string, enum: [general, trip, work, shared, project, other] }
+                    purposeLabel: { type: [string, "null"], maxLength: 120 }
+                - type: object
+                  required: [action, accountId]
+                  properties:
+                    action: { type: string, enum: [archive, restore] }
+                    accountId: { type: string, format: uuid }
+      responses:
+        "200": { description: Account and optional pending-candidate reprocessing result }
+        "402": { description: Active subscription or annual plan required for multiple accounts }
+        "422": { description: Invalid account operation }
+  /storage-oauth-start:
+    post:
+      summary: Start annual-only OAuth for Google Drive or OneDrive backup.
+      operationId: startStorageOAuth
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [provider]
+              properties:
+                provider: { type: string, enum: [google_drive, onedrive] }
+                returnUrl: { type: string, format: uri }
+      responses:
+        "200": { description: Authorization URL }
+        "402": { description: Annual subscription required }
+  /storage-backup-settings:
+    post:
+      summary: Set annual cloud-backup frequency.
+      operationId: updateBackupFrequency
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [connectionId, frequency]
+              properties:
+                connectionId: { type: string, format: uuid }
+                frequency: { type: string, enum: [manual, daily, weekly] }
+      responses:
+        "200": { description: Updated schedule }
+        "402": { description: Annual subscription required }
+  /cloud-backup-create:
+    post:
+      summary: Create a manual annual cloud backup.
+      operationId: createCloudBackup
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [connectionId]
+              properties:
+                connectionId: { type: string, format: uuid }
+                kind: { type: string, enum: [manual, scheduled] }
+      responses:
+        "200": { description: Backup metadata }
+        "402": { description: Annual subscription required }
+  /cloud-backup-restore:
+    post:
+      summary: Restore an annual cloud backup after checksum and pre-restore safety copy.
+      operationId: restoreCloudBackup
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [connectionId, backupId, confirmation]
+              properties:
+                connectionId: { type: string, format: uuid }
+                backupId: { type: string, format: uuid }
+                confirmation: { const: RESTAURAR }
+      responses:
+        "200": { description: Restore completed }
+        "402": { description: Annual subscription required }
+        "409": { description: Backup checksum mismatch }
+  /storage-disconnect:
+    post:
+      summary: Remove encrypted cloud-storage credentials without deleting remote files.
+      operationId: disconnectStorage
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [connectionId]
+              properties:
+                connectionId: { type: string, format: uuid }
+      responses:
+        "200": { description: Connection disconnected }
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    ImportRow:
+      type: object
+      required: [source_row, occurred_at, kind, amount_minor, currency]
+      properties:
+        source_row: { type: integer, minimum: 1 }
+        occurred_at: { type: string, format: date-time }
+        kind: { type: string, enum: [income, expense] }
+        amount_minor: { type: integer, minimum: 1 }
+        currency: { type: string, minLength: 3, maxLength: 3 }
+        merchant: { type: [string, "null"] }
+        description: { type: [string, "null"] }
+        category_name: { type: [string, "null"] }
+        account_name: { type: [string, "null"] }
+    DetectedCandidate:
+      type: object
+      required: [localId, provider, occurredAt, proposedKind, amountMinor, currency, confidence, fingerprint]
+      properties:
+        localId: { type: string }
+        provider: { type: string, enum: [android_notification, gmail, outlook] }
+        externalId: { type: [string, "null"] }
+        appPackage: { type: [string, "null"] }
+        occurredAt: { type: string, format: date-time }
+        proposedKind: { type: string, enum: [income, expense] }
+        amountMinor: { type: integer, minimum: 1 }
+        currency: { type: string, minLength: 3, maxLength: 3 }
+        merchant: { type: [string, "null"], maxLength: 160 }
+        description: { type: [string, "null"], maxLength: 500 }
+        confidence: { type: number, minimum: 0, maximum: 1 }
+        fingerprint: { type: string, minLength: 16, maxLength: 128 }
+        reasons:
+          type: array
+          items: { type: string }
+    AllocationPlan:
+      type: object
+      required: [version, currency, availableMinor, allocations, warnings]
+      properties:
+        version: { type: string }
+        currency: { type: string }
+        availableMinor: { type: integer }
+        allocations:
+          type: array
+          items:
+            type: object
+            required: [bucket, amountMinor, priority]
+            properties:
+              bucket: { type: string }
+              amountMinor: { type: integer }
+              priority: { type: integer }
+              rationale: { type: string }
+        warnings:
+          type: array
+          items: { type: string }
