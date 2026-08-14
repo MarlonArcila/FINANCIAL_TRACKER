@@ -14,7 +14,7 @@ No reutilice secretos, bases de datos, OAuth clients ni webhooks entre staging y
 
 ## 2. Prerrequisitos
 
-- Node.js 22 o superior.
+- Node.js 22.12 o superior.
 - npm 10 o superior.
 - Supabase CLI.
 - Android Studio y JDK compatible con la versión de Capacitor.

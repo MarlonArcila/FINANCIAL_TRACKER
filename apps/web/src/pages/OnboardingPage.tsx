@@ -179,7 +179,7 @@ export function OnboardingPage({ user, onComplete }: { user: AppUser; onComplete
         <form className={`panel onboarding-step ${accounts.length ? "done" : ""}`} onSubmit={(event) => void createPrimary(event)}>
           <StepNumber value="2" done={accounts.length > 0} />
           <h2>Cuenta principal</h2>
-          {accounts.length ? <><strong>{accounts.find((item) => item.is_primary)?.name ?? accounts[0].name}</strong><p>Esta será el destino predeterminado cuando no exista ambigüedad.</p></> : <>
+          {accounts.length ? <><strong>{accounts.find((item) => item.is_primary)?.name ?? accounts[0]?.name ?? "Cuenta principal"}</strong><p>Esta será el destino predeterminado cuando no exista ambigüedad.</p></> : <>
             <label className="field"><span>Nombre</span><input value={accountName} onChange={(event) => setAccountName(event.target.value)} required /></label>
             <label className="field"><span>Saldo inicial ({profile.base_currency})</span><input type="number" step="any" value={openingBalance} onChange={(event) => setOpeningBalance(event.target.value)} /></label>
             <button className="secondary-button" type="submit" disabled={busy !== null}>Crear cuenta principal</button>

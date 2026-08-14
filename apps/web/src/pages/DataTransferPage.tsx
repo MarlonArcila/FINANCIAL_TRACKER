@@ -97,18 +97,24 @@ export function DataTransferPage({ user }: { user: AppUser }) {
       const chunkSize = 300;
       for (let offset = 0; offset < normalized.rows.length; offset += chunkSize) {
         const chunk = normalized.rows.slice(offset, offset + chunkSize);
-        result = await importTransactionRows({
-          importId,
-          filename: importId ? undefined : parsed.filename,
-          fileType: importId ? undefined : parsed.fileType,
-          fileSha256: importId ? undefined : parsed.sha256,
+        const commonInput = {
           sourceApp: sourceApp.trim() || null,
-          mapping: importId ? undefined : Object.fromEntries(Object.entries(mapping).filter(([, value]) => Boolean(value))) as Record<string, string>,
           defaultAccountId: defaultAccount.id,
           createMissingCategories: createCategories,
           rows: chunk,
           finalChunk: offset + chunkSize >= normalized.rows.length,
-        });
+        };
+        result = await importTransactionRows(importId
+          ? { ...commonInput, importId }
+          : {
+              ...commonInput,
+              filename: parsed.filename,
+              fileType: parsed.fileType,
+              fileSha256: parsed.sha256,
+              mapping: Object.fromEntries(
+                Object.entries(mapping).filter(([, value]) => Boolean(value)),
+              ) as Record<string, string>,
+            });
         importId = result.importId;
       }
       clearFinancialCache();

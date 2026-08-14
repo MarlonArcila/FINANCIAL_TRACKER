@@ -99,7 +99,7 @@ export function SubscriptionPage({
       <div className="page-heading">
         <div><span className="eyebrow">ACCESO</span><h1>Elige cuánto tiempo quieres dejar tus finanzas en automático</h1><p>El plan semanal sirve para comprobar el flujo completo con una cuenta principal. El anual añade IA, cuentas independientes y backup/restore en nube para una experiencia continua.</p></div>
       </div>
-      {active ? (
+      {active && subscription ? (
         <Notice tone="success">
           Tu plan {subscription.interval === "weekly" ? "semanal" : "anual"} está activo
           {subscription.current_period_end ? ` hasta ${new Date(subscription.current_period_end).toLocaleDateString("es-CO")}` : ""}.

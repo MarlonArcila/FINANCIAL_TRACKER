@@ -1,9 +1,11 @@
 import { env } from "./env";
 import { requireSupabase } from "./supabase";
 
+type FunctionBody = Record<string, unknown>;
+
 export async function invokeFunction<TResponse>(
   functionName: string,
-  body?: unknown,
+  body?: FunctionBody,
 ): Promise<TResponse> {
   const client = requireSupabase();
   const { data: sessionData, error: sessionError } = await client.auth.getSession();
@@ -12,19 +14,26 @@ export async function invokeFunction<TResponse>(
   if (!accessToken) throw new Error("Sesión requerida.");
 
   if (!env.functionsBaseUrl) {
-    const { data, error } = await client.functions.invoke<TResponse>(functionName, { body });
+    const options = body === undefined ? {} : { body };
+    const { data, error } = await client.functions.invoke<TResponse>(functionName, options);
     if (error) throw error;
+    if (data === null) throw new Error(`Function ${functionName} returned no data.`);
     return data;
   }
 
-  const response = await fetch(`${env.functionsBaseUrl.replace(/\/$/u, "")}/${functionName}`, {
+  const requestInit: RequestInit = {
     method: "POST",
     headers: {
       authorization: `Bearer ${accessToken}`,
       "content-type": "application/json",
     },
-    body: body === undefined ? undefined : JSON.stringify(body),
-  });
+  };
+  if (body !== undefined) requestInit.body = JSON.stringify(body);
+
+  const response = await fetch(
+    `${env.functionsBaseUrl.replace(/\/$/u, "")}/${functionName}`,
+    requestInit,
+  );
 
   if (!response.ok) {
     const message = await response.text();
