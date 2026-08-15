@@ -103,58 +103,36 @@ export async function applyCandidateAutomation(
 
   const baseCurrency = profile.base_currency;
   const sameCurrency = baseCurrency === candidate.currency;
-  const { data: transaction, error: insertError } = await service.from("transactions").insert({
-    user_id: userId,
-    account_id: account.id,
-    category_id: categoryResolution.id,
-    kind: candidate.proposedKind,
-    amount_minor: candidate.amountMinor,
-    currency: candidate.currency,
-    merchant: candidate.merchant,
-    description: candidate.description,
-    occurred_at: candidate.occurredAt,
-    source: candidate.provider,
-    source_candidate_id: candidateId,
-    auto_posted: true,
-    base_currency: baseCurrency,
-    base_amount_minor: sameCurrency ? candidate.amountMinor : null,
-    fx_rate: sameCurrency ? 1 : null,
-    fx_source: sameCurrency ? "identity" : null,
-    fx_rate_at: sameCurrency ? new Date().toISOString() : null,
-    metadata: {
-      parser_version: candidate.parserVersion,
-      confidence: candidate.confidence,
-      automation_score: score,
-      account_resolution: account.reason,
-      category_resolution: categoryResolution.reason,
-      policy: "automation-first-v1",
-    },
-  }).select("id").single();
-  if (insertError) throw insertError;
-
-  const { error: updateError } = await service.from("transaction_candidates").update({
-    status: "accepted",
-    auto_decision: true,
-    review_reason: null,
-    resolved_account_id: account.id,
-    resolved_category_id: categoryResolution.id,
+  const metadata = {
+    parser_version: candidate.parserVersion,
+    confidence: candidate.confidence,
     automation_score: score,
-    automation_metadata: {
-      policy: "automation-first-v1",
-      account_resolution: account.reason,
-      category_resolution: categoryResolution.reason,
-    },
-    reviewed_at: new Date().toISOString(),
-  }).eq("id", candidateId).eq("user_id", userId).eq("status", "pending");
-  if (updateError) throw updateError;
+    account_resolution: account.reason,
+    category_resolution: categoryResolution.reason,
+    policy: "automation-first-v1",
+  };
+  const { data: transactionId, error: autoPostError } = await service.rpc("auto_post_transaction_candidate", {
+    p_user_id: userId,
+    p_candidate_id: candidateId,
+    p_account_id: account.id,
+    p_category_id: categoryResolution.id,
+    p_automation_score: score,
+    p_metadata: metadata,
+    p_base_currency: baseCurrency,
+    p_base_amount_minor: sameCurrency ? candidate.amountMinor : null,
+    p_fx_rate: sameCurrency ? 1 : null,
+    p_fx_source: sameCurrency ? "identity" : null,
+    p_fx_rate_at: sameCurrency ? new Date().toISOString() : null,
+  });
+  if (autoPostError) throw autoPostError;
 
-  await audit(service, userId, "candidate.auto_accepted", transaction.id, {
+  await audit(service, userId, "candidate.auto_accepted", String(transactionId), {
     candidate_id: candidateId,
     score,
     account_resolution: account.reason,
     category_resolution: categoryResolution.reason,
   });
-  return { outcome: "auto_posted", transactionId: transaction.id, reason: "high_confidence", automationScore: score };
+  return { outcome: "auto_posted", transactionId: String(transactionId), reason: "high_confidence", automationScore: score };
 }
 
 /** Re-evaluates existing exceptions after the system learns a new rule or gains an unambiguous account. */
