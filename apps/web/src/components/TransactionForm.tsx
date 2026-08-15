@@ -3,6 +3,7 @@ import { fromMinorUnits, toMinorUnits, type TransactionKind } from "@capitalflow
 
 import { createTransaction } from "../lib/data";
 import type { Account, Category } from "../lib/types";
+import { InlineCategoryCreator } from "./InlineCategoryCreator";
 import { MoneyInput } from "./MoneyInput";
 import { Notice } from "./Notice";
 
@@ -10,15 +11,18 @@ export function TransactionForm({
   accounts,
   categories,
   onCreated,
+  onCategoryCreated,
 }: {
   accounts: Account[];
   categories: Category[];
   onCreated(): Promise<void> | void;
+  onCategoryCreated(category: Category): Promise<void> | void;
 }) {
   const defaultAccount = accounts[0];
   const [kind, setKind] = useState<"income" | "expense">("expense");
   const [accountId, setAccountId] = useState(defaultAccount?.id ?? "");
   const [categoryId, setCategoryId] = useState("");
+  const [showCategoryCreator, setShowCategoryCreator] = useState(false);
   const [amount, setAmount] = useState("");
   const [merchant, setMerchant] = useState("");
   const [description, setDescription] = useState("");
@@ -66,8 +70,8 @@ export function TransactionForm({
   return (
     <form className="form-card" onSubmit={(event) => void submit(event)}>
       <div className="segmented" aria-label="Tipo de movimiento">
-        <button type="button" className={kind === "expense" ? "active" : ""} onClick={() => { setKind("expense"); setCategoryId(""); }}>Gasto</button>
-        <button type="button" className={kind === "income" ? "active" : ""} onClick={() => { setKind("income"); setCategoryId(""); }}>Ingreso</button>
+        <button type="button" className={kind === "expense" ? "active" : ""} onClick={() => { setKind("expense"); setCategoryId(""); setShowCategoryCreator(false); }}>Gasto</button>
+        <button type="button" className={kind === "income" ? "active" : ""} onClick={() => { setKind("income"); setCategoryId(""); setShowCategoryCreator(false); }}>Ingreso</button>
       </div>
       {error ? <Notice tone="danger">{error}</Notice> : null}
       <div className="form-grid">
@@ -81,11 +85,37 @@ export function TransactionForm({
         <MoneyInput label="Monto" value={amount} currency={currency} onChange={setAmount} required />
         <label className="field">
           <span>Categoría</span>
-          <select value={categoryId} onChange={(event) => setCategoryId(event.target.value)}>
+          <select
+            value={categoryId}
+            onChange={(event) => {
+              if (event.target.value === "__create__") {
+                setCategoryId("");
+                setShowCategoryCreator(true);
+                return;
+              }
+              setShowCategoryCreator(false);
+              setCategoryId(event.target.value);
+            }}
+          >
             <option value="">Sin categoría</option>
             {filteredCategories.map((category) => <option value={category.id} key={category.id}>{category.name}</option>)}
+            <option value="__create__">＋ Crear categoría</option>
           </select>
         </label>
+        {showCategoryCreator ? (
+          <div className="inline-category-slot span-2">
+            <InlineCategoryCreator
+              defaultKind={kind}
+              options={[{ value: kind, label: kind === "expense" ? "Gastos" : "Ingresos" }]}
+              onCancel={() => setShowCategoryCreator(false)}
+              onCreated={async (category) => {
+                await onCategoryCreated(category);
+                setCategoryId(category.id);
+                setShowCategoryCreator(false);
+              }}
+            />
+          </div>
+        ) : null}
         <label className="field">
           <span>Fecha y hora</span>
           <input type="datetime-local" value={occurredAt} onChange={(event) => setOccurredAt(event.target.value)} required />

@@ -30,7 +30,7 @@ export function App() {
       <OnboardingGate user={session.user}>
         <AppShell route={route} navigate={navigate} user={session.user} onSignOut={session.signOut}>
           {route === "dashboard" ? <DashboardPage navigate={navigate} /> : null}
-          {route === "transactions" ? <TransactionsPage /> : null}
+          {route === "transactions" ? <TransactionsPage userId={session.user.id} /> : null}
           {route === "goals" ? <GoalsPage userId={session.user.id} /> : null}
           {route === "investments" ? <InvestmentsPage userId={session.user.id} /> : null}
           {route === "advisor" ? <AdvisorPage userId={session.user.id} /> : null}

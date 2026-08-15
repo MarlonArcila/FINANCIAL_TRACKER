@@ -6,6 +6,7 @@ import { invokeFunction } from "../lib/api";
 import {
   createAccount,
   createCategory,
+  deleteCategory,
   getFxRate,
   listAllAccounts,
   listCategories,
@@ -13,6 +14,7 @@ import {
   loadProfile,
   loadSubscription,
   setAccountArchived,
+  updateCategory,
   updateFinancialPreferences,
   updateProfile,
 } from "../lib/data";
@@ -34,6 +36,10 @@ export function SettingsPage({ user }: { user: AppUser }) {
   const [accountPurposeLabel, setAccountPurposeLabel] = useState("");
   const [categoryName, setCategoryName] = useState("");
   const [categoryKind, setCategoryKind] = useState<Category["kind"]>("expense");
+  const [selectedCategoryId, setSelectedCategoryId] = useState("");
+  const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null);
+  const [editCategoryName, setEditCategoryName] = useState("");
+  const [editCategoryKind, setEditCategoryKind] = useState<Category["kind"]>("expense");
   const [fxAmount, setFxAmount] = useState("100");
   const [fxFrom, setFxFrom] = useState("USD");
   const [fxTo, setFxTo] = useState("COP");
@@ -126,10 +132,64 @@ export function SettingsPage({ user }: { user: AppUser }) {
     event.preventDefault();
     setBusy("category");
     try {
-      await createCategory({ name: categoryName.trim(), kind: categoryKind });
-      setCategoryName(""); setMessage("Categoría creada."); await load();
+      const createdCategory = await createCategory({ name: categoryName.trim(), kind: categoryKind });
+      setCategoryName("");
+      setSelectedCategoryId(createdCategory.id);
+      setMessage("Categoría creada.");
+      await load();
     } catch (caught) { setError(caught instanceof Error ? caught.message : "No fue posible crear la categoría."); }
     finally { setBusy(null); }
+  }
+
+  function beginCategoryEdit(category: Category): void {
+    setEditingCategoryId(category.id);
+    setEditCategoryName(category.name);
+    setEditCategoryKind(category.kind);
+    setError(null);
+    setMessage(null);
+  }
+
+  async function saveCategoryEdit(event: FormEvent<HTMLFormElement>): Promise<void> {
+    event.preventDefault();
+    if (!editingCategoryId) return;
+    setBusy(`category-edit-${editingCategoryId}`);
+    setError(null);
+    try {
+      const updated = await updateCategory(editingCategoryId, {
+        name: editCategoryName,
+        kind: editCategoryKind,
+      });
+      setCategories((current) => current.map((category) => category.id === updated.id ? updated : category));
+      setSelectedCategoryId(updated.id);
+      setEditingCategoryId(null);
+      setMessage("Categoría actualizada.");
+      await load();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "No fue posible actualizar la categoría.");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function removeCategory(category: Category): Promise<void> {
+    const confirmed = window.confirm(
+      `¿Eliminar la categoría “${category.name}”? Solo se puede eliminar si no está siendo usada por movimientos, metas, inversiones, presupuestos o reglas.`,
+    );
+    if (!confirmed) return;
+    setBusy(`category-delete-${category.id}`);
+    setError(null);
+    try {
+      await deleteCategory(category.id);
+      setCategories((current) => current.filter((item) => item.id !== category.id));
+      if (selectedCategoryId === category.id) setSelectedCategoryId("");
+      if (editingCategoryId === category.id) setEditingCategoryId(null);
+      setMessage("Categoría eliminada.");
+      await load();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "No fue posible eliminar la categoría.");
+    } finally {
+      setBusy(null);
+    }
   }
 
   async function convertCurrency(event: FormEvent<HTMLFormElement>): Promise<void> {
@@ -184,7 +244,7 @@ export function SettingsPage({ user }: { user: AppUser }) {
       {message ? <Notice tone="success">{message}</Notice> : null}
       {error ? <Notice tone="danger">{error}</Notice> : null}
       <div className="settings-grid">
-        <form className="panel" onSubmit={(event) => void saveProfile(event)}>
+        <form className="panel profile-settings-panel" onSubmit={(event) => void saveProfile(event)}>
           <h2>Perfil y monedas</h2>
           <label className="field"><span>Nombre</span><input value={profile.full_name ?? ""} onChange={(event) => setProfile({ ...profile, full_name: event.target.value })} /></label>
           <label className="field"><span>Moneda base</span><select value={profile.base_currency} onChange={(event) => setProfile({ ...profile, base_currency: event.target.value })}>{currencyOptions.map((currency) => <option key={currency}>{currency}</option>)}</select></label>
@@ -194,7 +254,7 @@ export function SettingsPage({ user }: { user: AppUser }) {
           <button className="primary-button" type="submit" disabled={busy !== null}>{busy === "profile" ? "Guardando…" : "Guardar perfil"}</button>
         </form>
 
-        <form className="panel" onSubmit={(event) => void saveAutomation(event)}>
+        <form className="panel automation-settings-panel" onSubmit={(event) => void saveAutomation(event)}>
           <h2>Automatización</h2>
           <p>CapitalFlow registra automáticamente lo que puede resolver con seguridad y aprende de las correcciones excepcionales.</p>
           <label className="checkbox-field"><input type="checkbox" checked={preferences.auto_post_enabled} onChange={(event) => setPreferences({ ...preferences, auto_post_enabled: event.target.checked })} /><span>Registrar automáticamente movimientos de alta confianza</span></label>
@@ -212,18 +272,20 @@ export function SettingsPage({ user }: { user: AppUser }) {
           </div>
           {!canCreateAccount ? <Notice tone="info">Tu plan semanal incluye una sola cuenta principal. Cambia al anual para crear cuentas independientes sin mezclar sus movimientos con el seguimiento principal.</Notice> : <>
             <h3>{activeAccounts.length === 0 ? "Crear cuenta principal" : "Crear cuenta independiente"}</h3>
-            <label className="field"><span>Nombre</span><input value={accountName} onChange={(event) => setAccountName(event.target.value)} required /></label>
-            <label className="field"><span>Tipo</span><select value={accountType} onChange={(event) => setAccountType(event.target.value as Account["type"])}><option value="checking">Corriente</option><option value="savings">Ahorros</option><option value="cash">Efectivo</option><option value="credit">Crédito</option><option value="investment">Inversión</option><option value="other">Otra</option></select></label>
-            <label className="field"><span>Moneda</span><select value={accountCurrency} onChange={(event) => setAccountCurrency(event.target.value)}>{currencyOptions.map((currency) => <option key={currency}>{currency}</option>)}</select></label>
-            {activeAccounts.length > 0 ? <><label className="field"><span>Propósito</span><select value={accountPurpose} onChange={(event) => setAccountPurpose(event.target.value as Account["purpose"])}><option value="trip">Viaje</option><option value="work">Trabajo</option><option value="shared">Compartido</option><option value="project">Proyecto</option><option value="other">Otro</option></select></label><label className="field"><span>Detalle opcional</span><input value={accountPurposeLabel} onChange={(event) => setAccountPurposeLabel(event.target.value)} placeholder="Ej. Viaje a México con amigos" /></label></> : null}
-            <label className="field"><span>Saldo inicial ({accountCurrency})</span><input type="number" step="any" value={openingBalance} onChange={(event) => setOpeningBalance(event.target.value)} /></label>
-            <button className="secondary-button" type="submit" disabled={busy !== null}>{busy === "account" ? "Creando…" : activeAccounts.length === 0 ? "Crear cuenta principal" : "Crear cuenta independiente"}</button>
+            <div className="account-create-grid">
+              <label className="field"><span>Nombre</span><input value={accountName} onChange={(event) => setAccountName(event.target.value)} required /></label>
+              <label className="field"><span>Tipo</span><select value={accountType} onChange={(event) => setAccountType(event.target.value as Account["type"])}><option value="checking">Corriente</option><option value="savings">Ahorros</option><option value="cash">Efectivo</option><option value="credit">Crédito</option><option value="investment">Inversión</option><option value="other">Otra</option></select></label>
+              <label className="field"><span>Moneda</span><select value={accountCurrency} onChange={(event) => setAccountCurrency(event.target.value)}>{currencyOptions.map((currency) => <option key={currency}>{currency}</option>)}</select></label>
+              {activeAccounts.length > 0 ? <><label className="field"><span>Propósito</span><select value={accountPurpose} onChange={(event) => setAccountPurpose(event.target.value as Account["purpose"])}><option value="trip">Viaje</option><option value="work">Trabajo</option><option value="shared">Compartido</option><option value="project">Proyecto</option><option value="other">Otro</option></select></label><label className="field"><span>Detalle opcional</span><input value={accountPurposeLabel} onChange={(event) => setAccountPurposeLabel(event.target.value)} placeholder="Ej. Viaje a México con amigos" /></label></> : null}
+              <label className="field"><span>Saldo inicial ({accountCurrency})</span><input type="number" step="any" value={openingBalance} onChange={(event) => setOpeningBalance(event.target.value)} /></label>
+              <div className="account-create-actions"><button className="secondary-button" type="submit" disabled={busy !== null}>{busy === "account" ? "Creando…" : activeAccounts.length === 0 ? "Crear cuenta principal" : "Crear cuenta independiente"}</button></div>
+            </div>
           </>}
           {archivedAccounts.length > 0 ? <details className="archived-accounts"><summary>Cuentas archivadas ({archivedAccounts.length})</summary><div className="account-list">{archivedAccounts.map((account) => <AccountRow key={account.id} account={account} annual={annual} busy={busy} onToggle={toggleAccount} />)}</div></details> : null}
           <small>Archivar no elimina el historial: la cuenta y sus movimientos siguen incluidos en exportaciones y backups.</small>
         </form>
 
-        <form className="panel" onSubmit={(event) => void convertCurrency(event)}>
+        <form className="panel fx-settings-panel" onSubmit={(event) => void convertCurrency(event)}>
           <h2>Conversor interno</h2>
           <p>Convierte montos para visualización sin alterar la moneda original del movimiento.</p>
           <label className="field"><span>Monto</span><input type="number" min="0" step="any" value={fxAmount} onChange={(event) => setFxAmount(event.target.value)} required /></label>
@@ -236,17 +298,35 @@ export function SettingsPage({ user }: { user: AppUser }) {
           {fxResult ? <Notice tone="warning">{fxResult.warning}</Notice> : <Notice tone="info">En producción, la fuente predeterminada es la referencia visible de Google Finance. La cotización es informativa y puede diferir de la tasa efectiva de una entidad financiera.</Notice>}
         </form>
 
-        <form className="panel" onSubmit={(event) => void addCategory(event)}>
-          <h2>Categorías</h2>
-          <p>{categories.length} categoría(s) disponibles.</p>
-          <label className="field"><span>Nombre</span><input value={categoryName} onChange={(event) => setCategoryName(event.target.value)} required /></label>
-          <label className="field"><span>Aplica a</span><select value={categoryKind} onChange={(event) => setCategoryKind(event.target.value as Category["kind"])}><option value="expense">Gastos</option><option value="income">Ingresos</option><option value="goal">Metas</option><option value="investment">Inversiones</option><option value="mixed">Mixta</option></select></label>
-          <button className="secondary-button" type="submit" disabled={busy !== null}>{busy === "category" ? "Creando…" : "Crear categoría"}</button>
-        </form>
+        <article className="panel category-settings-panel">
+          <div className="panel-heading"><div><h2>Categorías</h2><p>{categories.length} categoría(s) disponibles.</p></div></div>
+          <CreatedCategoriesDropdown
+            categories={categories}
+            selectedId={selectedCategoryId}
+            busy={busy}
+            onSelect={(value) => { setSelectedCategoryId(value); if (editingCategoryId && editingCategoryId !== value) setEditingCategoryId(null); }}
+            onEdit={beginCategoryEdit}
+            onDelete={(category) => void removeCategory(category)}
+          />
+          {editingCategoryId ? (
+            <form className="category-edit-block" onSubmit={(event) => void saveCategoryEdit(event)}>
+              <div><h3>Editar categoría</h3><small>Puedes cambiar el nombre. El tipo solo puede cambiarse si la categoría aún no tiene datos asociados.</small></div>
+              <label className="field"><span>Nombre</span><input value={editCategoryName} onChange={(event) => setEditCategoryName(event.target.value)} required /></label>
+              <label className="field"><span>Aplica a</span><select value={editCategoryKind} onChange={(event) => setEditCategoryKind(event.target.value as Category["kind"])}><option value="expense">Gastos</option><option value="income">Ingresos</option><option value="goal">Metas</option><option value="investment">Inversiones</option><option value="mixed">Mixta</option></select></label>
+              <div className="button-row"><button className="primary-button" type="submit" disabled={busy !== null}>{busy === `category-edit-${editingCategoryId}` ? "Guardando…" : "Guardar cambios"}</button><button className="secondary-button" type="button" disabled={busy !== null} onClick={() => setEditingCategoryId(null)}>Cancelar</button></div>
+            </form>
+          ) : null}
+          <form className="category-create-block" onSubmit={(event) => void addCategory(event)}>
+            <h3>Crear nueva categoría</h3>
+            <label className="field"><span>Nombre</span><input value={categoryName} onChange={(event) => setCategoryName(event.target.value)} required /></label>
+            <label className="field"><span>Aplica a</span><select value={categoryKind} onChange={(event) => setCategoryKind(event.target.value as Category["kind"])}><option value="expense">Gastos</option><option value="income">Ingresos</option><option value="goal">Metas</option><option value="investment">Inversiones</option><option value="mixed">Mixta</option></select></label>
+            <button className="secondary-button" type="submit" disabled={busy !== null}>{busy === "category" ? "Creando…" : "Crear categoría"}</button>
+          </form>
+        </article>
 
-        <article className="panel">
-          <h2>Tus datos</h2>
-          <p>Descarga una copia portable o inicia una eliminación irreversible.</p>
+        <article className="panel user-data-panel">
+          <div><h2>Tus datos</h2>
+          <p>Descarga una copia portable o inicia una eliminación irreversible.</p></div>
           <div className="button-row"><button className="secondary-button" type="button" disabled={busy !== null} onClick={() => void exportData()}>{busy === "export" ? "Preparando…" : "Exportar JSON"}</button><button className="danger-button" type="button" disabled={busy !== null} onClick={() => void deleteAccount()}>{busy === "delete" ? "Eliminando…" : "Eliminar cuenta"}</button></div>
         </article>
       </div>
@@ -266,6 +346,74 @@ function purposeLabel(purpose: Account["purpose"]): string {
   if (purpose === "project") return "Proyecto";
   if (purpose === "general") return "General";
   return "Otro";
+}
+
+function CreatedCategoriesDropdown({
+  categories,
+  selectedId,
+  busy,
+  onSelect,
+  onEdit,
+  onDelete,
+}: {
+  categories: Category[];
+  selectedId: string;
+  busy: string | null;
+  onSelect(value: string): void;
+  onEdit(category: Category): void;
+  onDelete(category: Category): void;
+}) {
+  const createdCategories = categories
+    .filter((category) => !category.is_system)
+    .sort((a, b) => a.name.localeCompare(b.name, "es", { sensitivity: "base" }));
+  const selected = createdCategories.find((category) => category.id === selectedId) ?? null;
+
+  return (
+    <div className="created-categories-control">
+      <label className="field">
+        <span>Tus categorías creadas</span>
+        <select
+          value={selected?.id ?? ""}
+          onChange={(event) => onSelect(event.target.value)}
+          disabled={createdCategories.length === 0}
+        >
+          <option value="">
+            {createdCategories.length === 0
+              ? "Aún no has creado categorías propias"
+              : `Selecciona una categoría (${createdCategories.length})`}
+          </option>
+          {createdCategories.map((category) => (
+            <option key={category.id} value={category.id}>
+              {category.name} · {categoryKindLabel(category.kind)}
+            </option>
+          ))}
+        </select>
+      </label>
+      {selected ? (
+        <div className="selected-category-summary" aria-live="polite">
+          <div className="selected-category-copy">
+            <strong>{selected.icon ? `${selected.icon} ` : ""}{selected.name}</strong>
+            <small>Categoría personal · {categoryKindLabel(selected.kind)}</small>
+          </div>
+          <div className="selected-category-actions">
+            <span className="category-type-badge">{categoryKindLabel(selected.kind)}</span>
+            <button className="secondary-button category-action-button" type="button" disabled={busy !== null} onClick={() => onEdit(selected)}>Editar</button>
+            <button className="ghost-danger category-action-button" type="button" disabled={busy !== null} onClick={() => onDelete(selected)}>{busy === `category-delete-${selected.id}` ? "Eliminando…" : "Eliminar"}</button>
+          </div>
+        </div>
+      ) : (
+        <small>Las categorías base siguen disponibles al registrar y filtrar movimientos; aquí se muestran únicamente las que tú creas.</small>
+      )}
+    </div>
+  );
+}
+
+function categoryKindLabel(kind: Category["kind"]): string {
+  if (kind === "expense") return "Gastos";
+  if (kind === "income") return "Ingresos";
+  if (kind === "goal") return "Metas";
+  if (kind === "investment") return "Inversiones";
+  return "Mixta";
 }
 
 function downloadBlob(blob: Blob, filename: string): void {

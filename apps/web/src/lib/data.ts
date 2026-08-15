@@ -2,11 +2,12 @@ import { convertMinorUnits, normalizeCurrencyCodes, type CandidateKind, type Ris
 
 import { invokeFunction } from "./api";
 import { cachedUserQuery } from "./cache";
-import { demoMode } from "./env";
+import { demoMode, env } from "./env";
 import { readDemoState, updateDemoState } from "./demoStore";
 import { requireSupabase } from "./supabase";
 import type {
   Account,
+  AccountBalance,
   AdvisorSnapshot,
   Category,
   DashboardSummary,
@@ -52,7 +53,7 @@ export async function updateProfile(userId: string, patch: Partial<Profile>): Pr
 }
 
 export async function loadSubscription(userId: string): Promise<Subscription | null> {
-  if (demoMode) {
+  if (env.devBypassSubscription) {
     return {
       id: "demo-subscription",
       provider: "whop",
@@ -96,6 +97,29 @@ export async function listAllAccounts(): Promise<Account[]> {
   return (data ?? []) as Account[];
 }
 
+export async function listAccountBalances(accountId: string | null = null): Promise<AccountBalance[]> {
+  if (demoMode) {
+    const state = readDemoState();
+    return state.accounts
+      .filter((account) => !account.is_archived && (!accountId || account.id === accountId))
+      .map((account) => ({
+        ...account,
+        balance_minor: state.transactions
+          .filter((transaction) => transaction.account_id === account.id)
+          .reduce((balance, transaction) => balance + transactionBalanceDelta(transaction), account.opening_balance_minor),
+      }));
+  }
+
+  let query = requireSupabase()
+    .from("account_balances")
+    .select("*")
+    .eq("is_archived", false);
+  if (accountId) query = query.eq("id", accountId);
+  const { data, error } = await query;
+  if (error) throw error;
+  return (data ?? []) as AccountBalance[];
+}
+
 export async function createAccount(input: {
   name: string;
   type: Account["type"];
@@ -115,11 +139,32 @@ export async function createAccount(input: {
     updateDemoState((state) => state.accounts.push(account));
     return account;
   }
-  const result = await invokeFunction<{ account: Account }>("account-manage", {
-    action: "create", name: input.name, type: input.type, currency: input.currency, openingBalanceMinor: input.opening_balance_minor,
-    purpose: input.purpose ?? "general", purposeLabel: input.purpose_label ?? null,
-  });
-  return result.account;
+  try {
+    const result = await invokeFunction<{ account: Account }>("account-manage", {
+      action: "create", name: input.name, type: input.type, currency: input.currency, openingBalanceMinor: input.opening_balance_minor,
+      purpose: input.purpose ?? "general", purposeLabel: input.purpose_label ?? null,
+    });
+    return result.account;
+  } catch (caught) {
+    // Staging-only escape hatch: while the onboarding bypass is active, allow the
+    // client to create the account directly. RLS plus private.enforce_account_plan
+    // still enforce ownership, active entitlement and weekly/annual account limits.
+    // Production never enters this branch because devBypassOnboarding is DEV-only.
+    if (!env.devBypassOnboarding) throw caught;
+    const { data, error } = await requireSupabase().from("accounts").insert({
+      name: input.name,
+      type: input.type,
+      currency: input.currency.toUpperCase(),
+      opening_balance_minor: input.opening_balance_minor,
+      purpose: input.purpose ?? "general",
+      purpose_label: input.purpose_label ?? null,
+    }).select("*").single();
+    if (error) {
+      if (error.code === "42501") throw new Error("Supabase bloqueó la cuenta: verifica que el usuario tenga una suscripción active/trialing de staging.");
+      throw new Error(error.message || "No fue posible crear la cuenta principal.");
+    }
+    return data as Account;
+  }
 }
 
 export async function setAccountArchived(accountId: string, archived: boolean): Promise<Account> {
@@ -197,6 +242,85 @@ export async function createCategory(input: {
   return data as Category;
 }
 
+export async function updateCategory(categoryId: string, input: {
+  name: string;
+  kind: Category["kind"];
+}): Promise<Category> {
+  const normalizedName = input.name.trim();
+  if (!normalizedName) throw new Error("El nombre de la categoría es obligatorio.");
+
+  if (demoMode) {
+    const state = readDemoState();
+    const current = state.categories.find((category) => category.id === categoryId);
+    if (!current || current.is_system) throw new Error("Las categorías base no se pueden editar.");
+    if (current.kind !== input.kind) {
+      const inUse = state.transactions.some((item) => item.category_id === categoryId)
+        || state.goals.some((item) => item.category_id === categoryId)
+        || state.investments.some((item) => item.category_id === categoryId);
+      if (inUse) throw new Error("No puedes cambiar el tipo de una categoría que ya tiene datos asociados. Crea una categoría nueva o reasigna primero esos datos.");
+    }
+    const next = updateDemoState((draft) => {
+      const category = draft.categories.find((item) => item.id === categoryId);
+      if (!category) return;
+      category.name = normalizedName;
+      category.kind = input.kind;
+    }).categories.find((item) => item.id === categoryId);
+    if (!next) throw new Error("No fue posible actualizar la categoría.");
+    notifyFinancialDataChanged();
+    return next;
+  }
+
+  const { data, error } = await requireSupabase()
+    .from("categories")
+    .update({ name: normalizedName, kind: input.kind })
+    .eq("id", categoryId)
+    .eq("is_system", false)
+    .select("*")
+    .single();
+
+  if (error) {
+    if (error.code === "42501") throw new Error("Las categorías base no se pueden editar.");
+    if (error.message?.includes("CATEGORY_KIND_IN_USE")) {
+      throw new Error("No puedes cambiar el tipo de una categoría que ya tiene datos asociados. Crea una categoría nueva o reasigna primero esos datos.");
+    }
+    throw new Error(error.message || "No fue posible actualizar la categoría.");
+  }
+  notifyFinancialDataChanged();
+  return data as Category;
+}
+
+export async function deleteCategory(categoryId: string): Promise<void> {
+  if (demoMode) {
+    const state = readDemoState();
+    const current = state.categories.find((category) => category.id === categoryId);
+    if (!current || current.is_system) throw new Error("Las categorías base no se pueden eliminar.");
+    const inUse = state.transactions.some((item) => item.category_id === categoryId)
+      || state.goals.some((item) => item.category_id === categoryId)
+      || state.investments.some((item) => item.category_id === categoryId);
+    if (inUse) throw new Error("Esta categoría está en uso. Reasigna o elimina primero los movimientos, metas o inversiones que la utilizan.");
+    updateDemoState((draft) => {
+      draft.categories = draft.categories.filter((item) => item.id !== categoryId);
+    });
+    notifyFinancialDataChanged();
+    return;
+  }
+
+  const { error } = await requireSupabase()
+    .from("categories")
+    .delete()
+    .eq("id", categoryId)
+    .eq("is_system", false);
+
+  if (error) {
+    if (error.code === "42501") throw new Error("Las categorías base no se pueden eliminar.");
+    if (error.message?.includes("CATEGORY_IN_USE")) {
+      throw new Error("Esta categoría está en uso. Reasigna o elimina primero los movimientos, metas, inversiones, presupuestos o reglas que la utilizan.");
+    }
+    throw new Error(error.message || "No fue posible eliminar la categoría.");
+  }
+  notifyFinancialDataChanged();
+}
+
 export async function listTransactions(limit = 100, accountId: string | null = null): Promise<Transaction[]> {
   if (demoMode) {
     return readDemoState().transactions
@@ -242,7 +366,11 @@ export async function createTransaction(input: {
     .insert({ ...input, source: "manual" })
     .select("*")
     .single();
-  if (error) throw error;
+  if (error) {
+    if (error.code === "42501") throw new Error("Supabase bloqueó el movimiento por RLS. Verifica que la suscripción de staging siga active/trialing y que la cuenta pertenezca al usuario actual.");
+    throw new Error(error.message || "No fue posible registrar el movimiento.");
+  }
+  notifyFinancialDataChanged();
   return data as Transaction;
 }
 
@@ -255,6 +383,7 @@ export async function deleteTransaction(id: string): Promise<void> {
   }
   const { error } = await requireSupabase().from("transactions").delete().eq("id", id);
   if (error) throw error;
+  notifyFinancialDataChanged();
 }
 
 export async function listPendingCandidates(): Promise<TransactionCandidate[]> {
@@ -319,6 +448,7 @@ export async function decideCandidate(input: {
     learnCategory: input.learnCategory ?? true,
     corrections: input.corrections ?? {},
   });
+  notifyFinancialDataChanged();
 }
 
 export async function listGoals(): Promise<Goal[]> {
@@ -339,18 +469,80 @@ export async function createGoal(input: {
   priority: 1 | 2 | 3 | 4 | 5;
 }): Promise<Goal> {
   if (demoMode) {
+    let categoryId = input.category_id;
+    if (!categoryId) {
+      const existing = readDemoState().categories.find((category) =>
+        category.kind === "goal" && category.name.localeCompare(input.name, undefined, { sensitivity: "accent" }) === 0
+      );
+      if (existing) {
+        categoryId = existing.id;
+      } else {
+        const category: Category = {
+          id: crypto.randomUUID(),
+          name: input.name,
+          kind: "goal",
+          icon: null,
+          color: null,
+          is_system: false,
+        };
+        updateDemoState((state) => state.categories.push(category));
+        categoryId = category.id;
+      }
+    }
     const goal: Goal = {
       id: crypto.randomUUID(),
       ...input,
+      category_id: categoryId,
       current_minor: 0,
       status: "active",
     };
     updateDemoState((state) => state.goals.push(goal));
+    notifyFinancialDataChanged();
     return goal;
   }
+  // The database trigger added in migration 202608150001 creates a goal
+  // category automatically when category_id is null. This keeps the behavior
+  // consistent across web, Android and future clients.
   const { data, error } = await requireSupabase().from("goals").insert(input).select("*").single();
   if (error) throw error;
+  notifyFinancialDataChanged();
   return { ...(data as Goal), current_minor: 0 };
+}
+
+export async function updateGoal(goalId: string, patch: {
+  category_id?: string | null;
+  name?: string;
+  target_minor?: number;
+  target_date?: string | null;
+  priority?: 1 | 2 | 3 | 4 | 5;
+  status?: Goal["status"];
+}): Promise<void> {
+  if (demoMode) {
+    updateDemoState((state) => {
+      const goal = state.goals.find((item) => item.id === goalId);
+      if (!goal) throw new Error("No se encontró la meta.");
+      Object.assign(goal, patch);
+      if (goal.current_minor >= goal.target_minor && goal.status === "active") goal.status = "completed";
+    });
+    notifyFinancialDataChanged();
+    return;
+  }
+  const { error } = await requireSupabase().from("goals").update(patch).eq("id", goalId);
+  if (error) throw error;
+  notifyFinancialDataChanged();
+}
+
+export async function deleteGoal(goalId: string): Promise<void> {
+  if (demoMode) {
+    updateDemoState((state) => {
+      state.goals = state.goals.filter((item) => item.id !== goalId);
+    });
+    notifyFinancialDataChanged();
+    return;
+  }
+  const { error } = await requireSupabase().from("goals").delete().eq("id", goalId);
+  if (error) throw error;
+  notifyFinancialDataChanged();
 }
 
 export async function contributeToGoal(goalId: string, amountMinor: number, note: string | null): Promise<void> {
@@ -361,6 +553,7 @@ export async function contributeToGoal(goalId: string, amountMinor: number, note
       goal.current_minor = Math.min(goal.target_minor, goal.current_minor + amountMinor);
       if (goal.current_minor >= goal.target_minor) goal.status = "completed";
     });
+    notifyFinancialDataChanged();
     return;
   }
   const { error } = await requireSupabase().from("goal_contributions").insert({
@@ -370,6 +563,7 @@ export async function contributeToGoal(goalId: string, amountMinor: number, note
     contributed_at: new Date().toISOString(),
   });
   if (error) throw error;
+  notifyFinancialDataChanged();
 }
 
 export async function listInvestments(): Promise<Investment[]> {
@@ -402,6 +596,7 @@ export async function createInvestment(input: {
       updated_at: new Date().toISOString(),
     };
     updateDemoState((state) => state.investments.push(investment));
+    notifyFinancialDataChanged();
     return investment;
   }
 
@@ -436,12 +631,48 @@ export async function createInvestment(input: {
     valued_at: new Date().toISOString(),
   });
   if (valuationError) throw valuationError;
+  notifyFinancialDataChanged();
   return {
     id,
     ...input,
     return_bps: returnBps,
     updated_at: new Date().toISOString(),
   };
+}
+
+export async function updateInvestment(investmentId: string, patch: {
+  category_id?: string | null;
+  name?: string;
+  asset_class?: string;
+  risk_level?: RiskTolerance;
+  notes?: string | null;
+}): Promise<void> {
+  if (demoMode) {
+    updateDemoState((state) => {
+      const investment = state.investments.find((item) => item.id === investmentId);
+      if (!investment) throw new Error("No se encontró la inversión.");
+      Object.assign(investment, patch);
+      investment.updated_at = new Date().toISOString();
+    });
+    notifyFinancialDataChanged();
+    return;
+  }
+  const { error } = await requireSupabase().from("investments").update(patch).eq("id", investmentId);
+  if (error) throw error;
+  notifyFinancialDataChanged();
+}
+
+export async function deleteInvestment(investmentId: string): Promise<void> {
+  if (demoMode) {
+    updateDemoState((state) => {
+      state.investments = state.investments.filter((item) => item.id !== investmentId);
+    });
+    notifyFinancialDataChanged();
+    return;
+  }
+  const { error } = await requireSupabase().from("investments").delete().eq("id", investmentId);
+  if (error) throw error;
+  notifyFinancialDataChanged();
 }
 
 export type InvestmentActivityKind = "contribution" | "withdrawal" | "income" | "fee";
@@ -453,8 +684,8 @@ export async function recordInvestmentActivity(input: {
   occurred_at: string;
   note: string | null;
 }): Promise<void> {
-  if (!Number.isSafeInteger(input.amount_minor) || input.amount_minor < 0) {
-    throw new Error("El monto de la inversión debe ser un entero seguro no negativo.");
+  if (!Number.isSafeInteger(input.amount_minor) || input.amount_minor <= 0) {
+    throw new Error("El monto de la inversión debe ser un entero seguro mayor que cero.");
   }
 
   if (demoMode) {
@@ -463,19 +694,34 @@ export async function recordInvestmentActivity(input: {
       if (!investment) throw new Error("No se encontró la inversión.");
       if (input.kind === "contribution") {
         investment.net_contributions_minor += input.amount_minor;
+        investment.current_value_minor += input.amount_minor;
       } else if (input.kind === "withdrawal") {
         investment.net_contributions_minor = Math.max(0, investment.net_contributions_minor - input.amount_minor);
+        investment.current_value_minor = Math.max(0, investment.current_value_minor - input.amount_minor);
       }
       investment.return_bps = investment.net_contributions_minor === 0
         ? null
         : Math.round(((investment.current_value_minor - investment.net_contributions_minor) / investment.net_contributions_minor) * 10_000);
       investment.updated_at = input.occurred_at;
     });
+    notifyFinancialDataChanged();
     return;
   }
 
-  const { error } = await requireSupabase().from("investment_transactions").insert(input);
-  if (error) throw error;
+  if (input.kind === "contribution" || input.kind === "withdrawal") {
+    const { error } = await requireSupabase().rpc("record_investment_cashflow", {
+      p_investment_id: input.investment_id,
+      p_kind: input.kind,
+      p_amount_minor: input.amount_minor,
+      p_occurred_at: input.occurred_at,
+      p_note: input.note,
+    });
+    if (error) throw error;
+  } else {
+    const { error } = await requireSupabase().from("investment_transactions").insert(input);
+    if (error) throw error;
+  }
+  notifyFinancialDataChanged();
 }
 
 export async function recordInvestmentValuation(input: {
@@ -498,11 +744,13 @@ export async function recordInvestmentValuation(input: {
         : Math.round(((investment.current_value_minor - investment.net_contributions_minor) / investment.net_contributions_minor) * 10_000);
       investment.updated_at = input.valued_at;
     });
+    notifyFinancialDataChanged();
     return;
   }
 
   const { error } = await requireSupabase().from("investment_valuations").insert(input);
   if (error) throw error;
+  notifyFinancialDataChanged();
 }
 
 export async function listConnections(): Promise<SourceConnection[]> {
@@ -597,6 +845,10 @@ export async function loadAdvisorSnapshot(userId: string, currency: string): Pro
   };
 }
 
+function notifyFinancialDataChanged(): void {
+  window.dispatchEvent(new CustomEvent("capitalflow:financial-data-change"));
+}
+
 function transactionBalanceDelta(transaction: Transaction): number {
   if (transaction.kind === "income" || transaction.kind === "investment_return") return transaction.amount_minor;
   if (["expense", "goal_contribution", "investment_contribution"].includes(transaction.kind)) return -transaction.amount_minor;
@@ -627,54 +879,74 @@ export async function getFxRate(base: string, quote: string, amountMinor?: numbe
 }
 
 export async function loadDashboardSummary(accountId: string | null = null): Promise<DashboardSummary> {
-  const [transactions, candidates, profile, accounts] = await Promise.all([
+  const [transactions, candidates, profile, accountBalances] = await Promise.all([
     listTransactions(500, accountId),
     listPendingCandidates(),
     demoMode ? Promise.resolve(readDemoState().profile) : requireCurrentProfile(),
-    listAccounts(),
+    listAccountBalances(accountId),
   ]);
-  const scopedAccount = accountId ? accounts.find((account) => account.id === accountId) ?? null : null;
+  const scopedAccount = accountId ? accountBalances.find((account) => account.id === accountId) ?? null : null;
   const baseCurrency = scopedAccount?.currency ?? profile.base_currency;
-  const totals = new Map<string, { income: number; expense: number }>();
+  const flowTotals = new Map<string, { income: number; expense: number }>();
   for (const transaction of transactions) {
     if (transaction.kind !== "income" && transaction.kind !== "expense") continue;
-    const current = totals.get(transaction.currency) ?? { income: 0, expense: 0 };
+    const current = flowTotals.get(transaction.currency) ?? { income: 0, expense: 0 };
     if (transaction.kind === "income") current.income += transaction.amount_minor;
     else current.expense += transaction.amount_minor;
-    totals.set(transaction.currency, current);
+    flowTotals.set(transaction.currency, current);
+  }
+
+  const balanceTotals = new Map<string, number>();
+  for (const account of accountBalances) {
+    balanceTotals.set(account.currency, (balanceTotals.get(account.currency) ?? 0) + account.balance_minor);
   }
 
   let incomeMinor = 0;
   let expenseMinor = 0;
+  let currentBalanceMinor = 0;
   let fxWarning: string | null = null;
   let fxAsOf: string | null = null;
-  const convertedCurrencies: string[] = [];
-  for (const [currency, values] of totals) {
-    if (currency === baseCurrency) {
-      incomeMinor += values.income;
-      expenseMinor += values.expense;
-      continue;
-    }
+  const convertedCurrencies = new Set<string>();
+  const rates = new Map<string, FxRateResult>();
+
+  async function convert(amountMinor: number, currency: string): Promise<number | null> {
+    if (currency === baseCurrency) return amountMinor;
     try {
-      const result = await getFxRate(currency, baseCurrency);
-      incomeMinor += convertMinorUnits(values.income, currency, baseCurrency, result.rate);
-      expenseMinor += convertMinorUnits(values.expense, currency, baseCurrency, result.rate);
-      convertedCurrencies.push(currency);
+      let result = rates.get(currency);
+      if (!result) {
+        result = await getFxRate(currency, baseCurrency);
+        rates.set(currency, result);
+      }
+      convertedCurrencies.add(currency);
       fxWarning = result.warning;
       if (!fxAsOf || Date.parse(result.fetchedAt) > Date.parse(fxAsOf)) fxAsOf = result.fetchedAt;
+      return convertMinorUnits(amountMinor, currency, baseCurrency, result.rate);
     } catch {
-      fxWarning = `No fue posible convertir ${currency} a ${baseCurrency}; esos movimientos no se incluyen temporalmente en el total consolidado.`;
+      fxWarning = `No fue posible convertir ${currency} a ${baseCurrency}; esos valores no se incluyen temporalmente en el total consolidado.`;
+      return null;
     }
   }
 
+  for (const [currency, values] of flowTotals) {
+    const convertedIncome = await convert(values.income, currency);
+    const convertedExpense = await convert(values.expense, currency);
+    if (convertedIncome !== null) incomeMinor += convertedIncome;
+    if (convertedExpense !== null) expenseMinor += convertedExpense;
+  }
+
+  for (const [currency, balance] of balanceTotals) {
+    const convertedBalance = await convert(balance, currency);
+    if (convertedBalance !== null) currentBalanceMinor += convertedBalance;
+  }
 
   return {
     incomeMinor,
     expenseMinor,
     balanceMinor: incomeMinor - expenseMinor,
+    currentBalanceMinor,
     pendingCandidates: candidates.length,
     baseCurrency,
-    convertedCurrencies,
+    convertedCurrencies: [...convertedCurrencies],
     fxWarning,
     fxAsOf,
   };

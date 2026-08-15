@@ -165,10 +165,14 @@ revoke all on private.automation_metrics_30d from public, anon, authenticated;
 grant select on private.automation_metrics_30d to service_role;
 
 -- Keep the account balance view useful for scoped annual accounts.
+-- PostgreSQL CREATE OR REPLACE VIEW requires all existing columns to
+-- preserve their original name, type and position. New columns are
+-- therefore appended after the original account_balances columns.
 create or replace view public.account_balances
 with (security_invoker = true)
 as
 select
+  -- Existing view columns: keep this order unchanged.
   a.id,
   a.user_id,
   a.name,
@@ -176,10 +180,6 @@ select
   a.currency,
   a.opening_balance_minor,
   a.is_archived,
-  a.is_primary,
-  a.purpose,
-  a.purpose_label,
-  a.archived_at,
   a.created_at,
   a.updated_at,
   a.opening_balance_minor + coalesce(sum(
@@ -188,9 +188,16 @@ select
       when t.kind in ('expense', 'goal_contribution', 'investment_contribution') then -t.amount_minor
       else 0
     end
-  ), 0)::bigint as balance_minor
+  ), 0)::bigint as balance_minor,
+
+  -- Multi-account columns added by this migration.
+  a.is_primary,
+  a.purpose,
+  a.purpose_label,
+  a.archived_at
 from public.accounts a
-left join public.transactions t on t.account_id = a.id
+left join public.transactions t
+  on t.account_id = a.id
 group by a.id;
 
 -- Extend new-user provisioning without changing the existing trigger.

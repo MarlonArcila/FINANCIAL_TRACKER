@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react
 import { toMinorUnits } from "@capitalflow/core";
 
 import { GoalCard } from "../components/GoalCard";
+import { InlineCategoryCreator } from "../components/InlineCategoryCreator";
 import { LoadingScreen } from "../components/LoadingScreen";
 import { Notice } from "../components/Notice";
 import { createGoal, listCategories, listGoals, loadProfile } from "../lib/data";
@@ -13,6 +14,7 @@ export function GoalsPage({ userId }: { userId: string }) {
   const [showForm, setShowForm] = useState(false);
   const [name, setName] = useState("");
   const [categoryId, setCategoryId] = useState("");
+  const [showCategoryCreator, setShowCategoryCreator] = useState(false);
   const [target, setTarget] = useState("");
   const [currency, setCurrency] = useState("COP");
   const [currencies, setCurrencies] = useState<string[]>(["COP"]);
@@ -63,6 +65,7 @@ export function GoalsPage({ userId }: { userId: string }) {
       });
       setName("");
       setCategoryId("");
+      setShowCategoryCreator(false);
       setTarget("");
       setTargetDate("");
       setShowForm(false);
@@ -87,7 +90,8 @@ export function GoalsPage({ userId }: { userId: string }) {
         <form className="form-card" onSubmit={(event) => void submit(event)}>
           <div className="form-grid">
             <label className="field span-2"><span>Nombre de la meta</span><input value={name} onChange={(event) => setName(event.target.value)} maxLength={80} required placeholder="Ej. Fondo de emergencia" /></label>
-            <label className="field"><span>Categoría</span><select value={categoryId} onChange={(event) => setCategoryId(event.target.value)}><option value="">Sin categoría</option>{eligibleCategories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select></label>
+            <label className="field"><span>Categoría</span><select value={categoryId} onChange={(event) => { if (event.target.value === "__create__") { setCategoryId(""); setShowCategoryCreator(true); return; } setShowCategoryCreator(false); setCategoryId(event.target.value); }}><option value="">Automática: nombre de la meta</option>{eligibleCategories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}<option value="__create__">＋ Crear categoría</option></select></label>
+            {showCategoryCreator ? <div className="inline-category-slot span-2"><InlineCategoryCreator defaultKind="goal" options={[{ value: "goal", label: "Metas" }]} onCancel={() => setShowCategoryCreator(false)} onCreated={(category) => { setCategories((current) => [...current.filter((item) => item.id !== category.id), category].sort((a, b) => a.name.localeCompare(b.name, "es"))); setCategoryId(category.id); setShowCategoryCreator(false); }} /></div> : null}
             <label className="field"><span>Monto objetivo</span><input type="number" min="0" step="any" value={target} onChange={(event) => setTarget(event.target.value)} required /></label>
             <label className="field"><span>Moneda</span><select value={currency} onChange={(event) => setCurrency(event.target.value)}>{currencies.map((item) => <option key={item}>{item}</option>)}</select></label>
             <label className="field"><span>Fecha objetivo</span><input type="date" value={targetDate} onChange={(event) => setTargetDate(event.target.value)} /></label>
@@ -97,7 +101,7 @@ export function GoalsPage({ userId }: { userId: string }) {
         </form>
       ) : null}
       <div className="card-grid">
-        {goals.map((goal) => <GoalCard key={goal.id} goal={goal} categoryName={goal.category_id ? categoryById.get(goal.category_id) ?? null : null} onUpdated={load} />)}
+        {goals.map((goal) => <GoalCard key={goal.id} goal={goal} categoryName={goal.category_id ? categoryById.get(goal.category_id) ?? null : null} categories={categories} onUpdated={load} />)}
       </div>
       {goals.length === 0 ? <div className="empty-card"><strong>Define tu primera meta</strong><p>Puede ser una reserva, viaje, estudio, compra o cualquier objetivo medible.</p></div> : null}
     </section>
