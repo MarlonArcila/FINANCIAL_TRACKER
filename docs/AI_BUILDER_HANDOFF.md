@@ -10,7 +10,8 @@ Construye CapitalFlow siguiendo exactamente el PRD adjunto.
 Reglas obligatorias:
 - Usa importes enteros en unidades menores y código de moneda.
 - No conectes APIs bancarias.
-- Toda detección automática crea una transacción candidata revisable; no publiques movimientos silenciosamente.
+- Aplica automatización por excepción: una señal de alta confianza, no duplicada y resuelta sin conflicto puede contabilizarse automáticamente; crea `transaction_candidate` solo para ambigüedad, conflicto o riesgo. Las correcciones deben aprender reglas privadas y re-evaluar pendientes recientes.
+- El porcentaje de automatización/intervención es telemetría interna de QA en el backend; nunca lo muestres ni lo incluyas en contratos del frontend.
 - La versión web es PWA. La lectura de notificaciones requiere un APK Capacitor con NotificationListenerService Java.
 - Usa Supabase Auth/PostgreSQL/RLS como referencia, salvo que la plataforma obligue a otro backend; conserva el contrato OpenAPI y las mismas entidades.
 - Whop es la fuente de verdad de suscripciones semanal/anual. La API key y verificación de webhooks están solo en servidor.
@@ -101,7 +102,7 @@ La salida no es aceptable si:
 - guarda tokens en localStorage;
 - lee todas las notificaciones sin allowlist;
 - envía contenido crudo a IA;
-- crea transacciones automáticas sin revisión;
+- auto-contabiliza una señal sin deduplicación, política determinista de alta confianza y resolución segura de cuenta/categoría;
 - omite RLS/autorización;
 - no verifica webhook;
 - mezcla monedas;

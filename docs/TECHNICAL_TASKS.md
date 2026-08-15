@@ -133,12 +133,14 @@ Cada tarea indica requisitos de PRD, archivos/componentes, tablas, endpoints/fun
 **Tareas concretas**
 
 - Insertar evento + candidata con upsert.
+- Aplicar la política determinista después de deduplicar: contabilizar solo señales de alta confianza con cuenta/categoría resueltas sin conflicto; crear o mantener `pending` únicamente para excepciones.
 - Mostrar razones/confianza.
 - Editar campos y aceptar por RPC atómica.
 - Registrar corrección y regla opcional.
-- Manejar estados y reintentos.
+- Reprocesar excepciones recientes después de aprender una regla o crear una cuenta.
+- Mantener telemetría de automatización solo en el backend/esquema privado; no exponer porcentajes al cliente.
 
-**Terminado cuando:** aceptar dos veces crea una transacción; rechazar no cambia saldos.
+**Terminado cuando:** una señal inequívoca se contabiliza una sola vez; aceptar dos veces la misma excepción crea exactamente una transacción; rechazar no cambia saldos.
 
 ---
 
@@ -160,7 +162,7 @@ Cada tarea indica requisitos de PRD, archivos/componentes, tablas, endpoints/fun
 - Construir y firmar APK.
 - Probar instalación ADB y directa.
 
-**Terminado cuando:** notificación permitida aparece como candidata, paquete no permitido/OTP no aparece y reinicio no pierde cola.
+**Terminado cuando:** una notificación permitida llega como señal sanitizada y se auto-contabiliza o queda como excepción según la política; paquete no permitido/OTP no aparece y reinicio no pierde cola.
 
 ---
 
@@ -243,7 +245,7 @@ Cada tarea indica requisitos de PRD, archivos/componentes, tablas, endpoints/fun
 - Desconexión/revocación.
 - Preparar documentación de verificación de producción.
 
-**Terminado cuando:** nuevo correo de fixture genera una candidata una sola vez y desconexión elimina tokens.
+**Terminado cuando:** un correo de fixture se procesa una sola vez y, según la política, se auto-contabiliza o crea una excepción; la desconexión elimina tokens.
 
 ---
 

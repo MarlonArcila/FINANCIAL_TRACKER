@@ -3,6 +3,8 @@
 **Corte:** 13 de agosto de 2026  
 **Versión del scaffold:** 0.1.0
 
+> Criterio documental vigente: la ingestión opera por excepción. Las señales inequívocas pueden auto-contabilizarse; `transaction_candidates` queda reservada para ambigüedad, conflicto o riesgo. Las reglas aprendidas reevalúan pendientes y la telemetría de automatización es exclusivamente interna.
+
 ## Implementado
 
 - Monorepo TypeScript con núcleo financiero independiente de framework.
