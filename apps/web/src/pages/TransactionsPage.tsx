@@ -185,7 +185,7 @@ export function TransactionsPage({ userId }: { userId: string }) {
                 {visibleTransactions.map((transaction) => (
                   <tr key={transaction.id}>
                     <td>{new Date(transaction.occurred_at).toLocaleDateString("es-CO")}</td>
-                    <td><strong>{transaction.merchant ?? transaction.description ?? "Movimiento"}</strong><small>{transaction.source}</small></td>
+                    <td><strong>{transaction.merchant ?? transaction.description ?? "Movimiento"}</strong><small>{transaction.auto_posted ? `Auto-contabilizado · ${sourceLabel(transaction.source)}` : sourceLabel(transaction.source)}</small></td>
                     <td>{transaction.category_id ? categoryById.get(transaction.category_id)?.name ?? "—" : "—"}</td>
                     <td>{accountById.get(transaction.account_id) ?? "—"}</td>
                     <td className={`numeric amount-${transaction.kind}`}>{transaction.kind === "expense" ? "−" : transaction.kind === "income" ? "+" : ""}{formatMinor(transaction.amount_minor, transaction.currency)}</td>
@@ -200,6 +200,15 @@ export function TransactionsPage({ userId }: { userId: string }) {
       ) : null}
     </section>
   );
+}
+
+function sourceLabel(source: Transaction["source"]): string {
+  if (source === "android_notification") return "Notificación Android";
+  if (source === "gmail") return "Gmail";
+  if (source === "outlook") return "Outlook";
+  if (source === "import_file") return "Importación";
+  if (source === "manual") return "Registro manual";
+  return "Sistema";
 }
 
 function readInitialTab(): "candidates" | "manual" | "ledger" {

@@ -61,6 +61,7 @@ export interface Transaction {
   description: string | null;
   occurred_at: string;
   source: "manual" | "android_notification" | "gmail" | "outlook" | "system" | "import_file";
+  auto_posted?: boolean;
   created_at: string;
 }
 
