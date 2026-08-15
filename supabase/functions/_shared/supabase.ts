@@ -1,6 +1,6 @@
 import { createClient, type SupabaseClient, type User } from "npm:@supabase/supabase-js@2";
 
-import { optionalEnv, requiredEnv, serviceKey } from "./env.ts";
+import { publishableKey, requiredEnv, serviceKey } from "./env.ts";
 import { HttpError } from "./http.ts";
 
 export function createServiceClient(): SupabaseClient {
@@ -10,8 +10,8 @@ export function createServiceClient(): SupabaseClient {
 }
 
 export function createRequestClient(request: Request): SupabaseClient {
-  const publishableKey = optionalEnv("SUPABASE_PUBLISHABLE_KEY") ?? requiredEnv("SUPABASE_ANON_KEY");
-  return createClient(requiredEnv("SUPABASE_URL"), publishableKey, {
+  const key = publishableKey();
+  return createClient(requiredEnv("SUPABASE_URL"), key, {
     auth: { persistSession: false, autoRefreshToken: false },
     global: { headers: { authorization: request.headers.get("authorization") ?? "" } },
   });

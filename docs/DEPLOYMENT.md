@@ -60,10 +60,12 @@ supabase db reset
 
 ### 4.2 Configurar secretos
 
+Supabase hospedado inyecta automáticamente `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEYS` y `SUPABASE_SECRET_KEYS` en las Edge Functions. No los cargue con `supabase secrets set`. El backend resuelve primero esos mapas JSON (clave `default`), luego `SUPABASE_PUBLISHABLE_KEY` / `SUPABASE_SECRET_KEY` para desarrollo local y finalmente `SUPABASE_ANON_KEY` / `SUPABASE_SERVICE_ROLE_KEY` como compatibilidad heredada. Ninguna variable `VITE_*` se usa para secretos backend.
+
+
 ```bash
 supabase secrets set \
   APP_URL=https://app.example.com \
-  SUPABASE_SECRET_KEY=... \
   OAUTH_TOKEN_ENCRYPTION_KEY_B64=... \
   OAUTH_STATE_SECRET=... \
   GOOGLE_CLIENT_ID=... \
