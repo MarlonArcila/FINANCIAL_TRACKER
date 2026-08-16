@@ -24,7 +24,7 @@ export async function exchangeMicrosoftCode(code: string, codeVerifier: string):
     }),
   });
   const payload = await response.json() as Record<string, unknown>;
-  if (!response.ok || typeof payload.access_token !== "string") throw new Error(`Microsoft token exchange failed: ${JSON.stringify(payload)}`);
+  if (!response.ok || typeof payload.access_token !== "string") throw new Error("Microsoft token exchange failed");
   return {
     accessToken: payload.access_token,
     refreshToken: typeof payload.refresh_token === "string" ? payload.refresh_token : null,
@@ -54,7 +54,7 @@ export async function getMicrosoftAccessToken(service: SupabaseClient, connectio
     }),
   });
   const payload = await response.json() as Record<string, unknown>;
-  if (!response.ok || typeof payload.access_token !== "string") throw new Error(`Microsoft token refresh failed: ${JSON.stringify(payload)}`);
+  if (!response.ok || typeof payload.access_token !== "string") throw new Error("Microsoft token refresh failed");
   await saveTokens(service, connectionId, {
     accessToken: payload.access_token,
     refreshToken: typeof payload.refresh_token === "string" ? payload.refresh_token : tokens.refreshToken,
@@ -80,7 +80,7 @@ export async function configureOutlookSubscription(
       body: JSON.stringify({ expirationDateTime: expiration }),
     });
     if (response.status !== 404) {
-      if (!response.ok) throw new Error(`Microsoft Graph ${response.status}: ${await response.text()}`);
+      if (!response.ok) throw new Error(`Microsoft Graph  failed`);
       const payload = response.status === 204 ? null : (await response.json()) as { expirationDateTime?: string };
       await service.from("source_connections").update({
         watch_expires_at: payload?.expirationDateTime ?? expiration,
@@ -183,7 +183,7 @@ export async function syncOutlookConnection(
 
 async function graphFetch(accessToken: string, url: string, init: RequestInit = {}): Promise<Response> {
   const response = await graphRequest(accessToken, url, init);
-  if (!response.ok) throw new Error(`Microsoft Graph ${response.status}: ${await response.text()}`);
+  if (!response.ok) throw new Error(`Microsoft Graph  failed`);
   return response;
 }
 

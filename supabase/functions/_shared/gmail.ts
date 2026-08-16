@@ -30,7 +30,7 @@ export async function exchangeGoogleCode(code: string, codeVerifier: string): Pr
     }),
   });
   const payload = await response.json() as Record<string, unknown>;
-  if (!response.ok || typeof payload.access_token !== "string") throw new Error(`Google token exchange failed: ${JSON.stringify(payload)}`);
+  if (!response.ok || typeof payload.access_token !== "string") throw new Error("Google token exchange failed");
   return {
     accessToken: payload.access_token,
     refreshToken: typeof payload.refresh_token === "string" ? payload.refresh_token : null,
@@ -58,7 +58,7 @@ export async function getGoogleAccessToken(service: SupabaseClient, connectionId
     }),
   });
   const payload = await response.json() as Record<string, unknown>;
-  if (!response.ok || typeof payload.access_token !== "string") throw new Error(`Google token refresh failed: ${JSON.stringify(payload)}`);
+  if (!response.ok || typeof payload.access_token !== "string") throw new Error("Google token refresh failed");
   await saveTokens(service, connectionId, {
     accessToken: payload.access_token,
     refreshToken: tokens.refreshToken,
@@ -116,7 +116,7 @@ export async function syncGmailConnection(
       messageIds = [...new Set((payload.history ?? []).flatMap((item) => item.messagesAdded ?? []).map((item) => item.message?.id).filter((id): id is string => Boolean(id)))];
       newestHistoryId = payload.historyId ?? newestHistoryId;
     } catch (error) {
-      console.warn("Gmail history fallback", error);
+      console.warn("Gmail history fallback");
       historyUnavailable = true;
       messageIds = [];
     }
@@ -188,7 +188,7 @@ async function googleFetch(accessToken: string, url: string, init: RequestInit =
   const headers = new Headers(init.headers);
   headers.set("authorization", `Bearer ${accessToken}`);
   const response = await fetch(url, { ...init, headers });
-  if (!response.ok) throw new Error(`Gmail API ${response.status}: ${await response.text()}`);
+  if (!response.ok) throw new Error(`Gmail API  failed`);
   return response;
 }
 

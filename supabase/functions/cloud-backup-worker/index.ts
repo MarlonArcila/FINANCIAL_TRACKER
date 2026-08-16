@@ -1,5 +1,5 @@
 import { nextBackupAt, performCloudBackup, type BackupConnection } from "../_shared/cloud-backup-service.ts";
-import { requiredEnv } from "../_shared/env.ts";
+import { requireCronSecret } from "../_shared/cron.ts";
 import { errorResponse, handleOptions, HttpError, json } from "../_shared/http.ts";
 import { createServiceClient } from "../_shared/supabase.ts";
 
@@ -7,7 +7,7 @@ Deno.serve(async (request) => {
   const preflight = handleOptions(request); if (preflight) return preflight;
   try {
     if (request.method !== "POST") throw new HttpError(405, "method_not_allowed");
-    if (request.headers.get("x-cron-secret") !== requiredEnv("CRON_SECRET")) throw new HttpError(401, "invalid_cron_secret");
+    requireCronSecret(request);
     const service = createServiceClient();
     const now = new Date();
     const { data: connections, error } = await service.from("storage_connections")

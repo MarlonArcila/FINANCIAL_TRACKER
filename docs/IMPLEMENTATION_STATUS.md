@@ -5,6 +5,15 @@
 
 > Criterio documental vigente: la ingestión opera por excepción. Las señales inequívocas pueden auto-contabilizarse; `transaction_candidates` queda reservada para ambigüedad, conflicto o riesgo. Las reglas aprendidas reevalúan pendientes y la telemetría de automatización es exclusivamente interna.
 
+## Auditoría de seguridad de Edge Functions — 15 de agosto de 2026
+
+- Se revisaron las 28 funciones y `supabase/config.toml`: las 19 funciones A conservan el JWT de Gateway; los callbacks OAuth (B), webhooks verificados (C) y workers internos (D) usan `verify_jwt = false` de forma intencional y validan su límite de confianza dentro del handler.
+- Se corrigió el consumo de `storage_oauth_states`: el `UPDATE` atómico ahora exige también que el estado siga vigente, evitando una carrera que consumía un state vencido.
+- Gmail Pub/Sub en modo OIDC exige ahora el correo de la service account configurada y `email_verified`; el fallback por token queda limitado a instalaciones sin audiencia OIDC.
+- `cloud-backup-worker` reutiliza la validación constante de `CRON_SECRET` de los demás workers.
+- Los errores, logs y respuestas de proveedores ya no incluyen cuerpos remotos, payloads ni mensajes arbitrarios; se conservan sólo categorías y códigos seguros.
+- Cobertura nueva: estados OAuth de almacenamiento caducados/usados/malformados, identidad OIDC no confiable, secreto CRON inválido y respuesta de error sin filtración. Las pruebas E2E contra Google, Microsoft, Whop y Supabase real siguen pendientes de infraestructura externa.
+
 ## Implementado
 
 - Monorepo TypeScript con núcleo financiero independiente de framework.
@@ -34,7 +43,7 @@
 ## Evidencia de verificación incluida
 
 - 18 pruebas del núcleo: parsing financiero, importación CSV/TSV/JSON, montos/fechas, ruido/OTP, deduplicación, asignación, déficit, interés compuesto y rentabilidad.
-- 19 pruebas server-side/políticas: automatización, calibración de onboarding, política de cuentas, backup format/checksum, Gmail/Outlook, sanitización y canonicalización de candidatas Android.
+- pruebas server-side/políticas para automatización, OAuth, backups y límites de autenticación: automatización, calibración de onboarding, política de cuentas, backup format/checksum, Gmail/Outlook, sanitización y canonicalización de candidatas Android.
 - 4 smoke tests Java sobre el parser Android, incluida la regresión que evita interpretar “Mercado” como el código de moneda `CAD`.
 - Validación sintáctica TypeScript del frontend y de todas las Edge Functions.
 - Workflow de GitHub Actions que instala dependencias, ejecuta `test:all`, hace typecheck estricto y construye la PWA.

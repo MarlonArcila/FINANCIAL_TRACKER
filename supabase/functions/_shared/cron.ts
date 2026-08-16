@@ -2,9 +2,8 @@ import { requiredEnv } from "./env.ts";
 import { HttpError } from "./http.ts";
 
 /** Constant-time-enough comparison for high-entropy deployment secrets. */
-export function requireCronSecret(request: Request): void {
+export function requireCronSecret(request: Request, expected = requiredEnv("CRON_SECRET")): void {
   const supplied = request.headers.get("x-cron-secret") ?? "";
-  const expected = requiredEnv("CRON_SECRET");
   if (!sameLengthConstantTime(supplied, expected)) throw new HttpError(401, "invalid_cron_secret");
 }
 

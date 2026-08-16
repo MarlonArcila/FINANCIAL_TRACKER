@@ -35,7 +35,7 @@ Deno.serve(async (request) => {
     });
     const payload = await response.json() as Record<string, unknown>;
     if (!response.ok || typeof payload.purchase_url !== "string") {
-      console.error("Whop checkout failed", response.status, payload);
+      console.error("Whop checkout failed", response.status);
       throw new HttpError(502, "checkout_provider_error");
     }
     await service.schema("private").from("audit_events").insert({

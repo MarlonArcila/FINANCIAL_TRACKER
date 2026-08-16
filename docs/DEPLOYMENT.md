@@ -67,7 +67,6 @@ Supabase hospedado inyecta automáticamente `SUPABASE_URL`, `SUPABASE_PUBLISHABL
 supabase secrets set \
   APP_URL=https://app.example.com \
   OAUTH_TOKEN_ENCRYPTION_KEY_B64=... \
-  OAUTH_STATE_SECRET=... \
   GOOGLE_CLIENT_ID=... \
   GOOGLE_CLIENT_SECRET=... \
   GOOGLE_REDIRECT_URI=... \
@@ -178,8 +177,8 @@ Use API v1 y fije una fecha de versión en configuración. Pruebe en sandbox ant
 - Conceda al servicio de Gmail permiso de publicación sobre el tópico.
 - Cree una cuenta de servicio para la suscripción push y habilite autenticación OIDC.
 - Cree suscripción push HTTPS hacia `gmail-pubsub-webhook`.
-- Configure `GMAIL_PUBSUB_AUDIENCE` con la audiencia exacta emitida en el JWT y, de forma recomendada, fije también `GMAIL_PUBSUB_SERVICE_ACCOUNT_EMAIL`.
-- Use `GMAIL_PUBSUB_TOKEN` en la URL únicamente como fallback de sandbox cuando no se configure audiencia OIDC.
+- Configure `GMAIL_PUBSUB_AUDIENCE` con la audiencia exacta emitida en el JWT y fije obligatoriamente `GMAIL_PUBSUB_SERVICE_ACCOUNT_EMAIL` con la cuenta de servicio que firma el push OIDC.
+- Use `GMAIL_PUBSUB_TOKEN` en la URL únicamente con `CAPITALFLOW_ENV=local` o `test`. En cualquier entorno desplegado, la ausencia de audiencia OIDC falla cerrada.
 - Ejecute `users.watch` y conserve `historyId` y `expiration`.
 - Programe renovación diaria o antes de expiración.
 

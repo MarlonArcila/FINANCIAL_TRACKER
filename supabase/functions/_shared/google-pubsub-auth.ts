@@ -2,6 +2,7 @@ import { createRemoteJWKSet, jwtVerify } from "npm:jose@6";
 
 import { optionalEnv, requiredEnv } from "./env.ts";
 import { HttpError } from "./http.ts";
+import { canUseGmailPubSubTokenFallback, validateGooglePubSubClaims } from "./external-auth.ts";
 
 const GOOGLE_JWKS = createRemoteJWKSet(new URL("https://www.googleapis.com/oauth2/v3/certs"));
 
@@ -12,6 +13,9 @@ const GOOGLE_JWKS = createRemoteJWKSet(new URL("https://www.googleapis.com/oauth
 export async function requireGooglePubSubAuth(request: Request): Promise<void> {
   const audience = optionalEnv("GMAIL_PUBSUB_AUDIENCE");
   if (!audience) {
+    if (!canUseGmailPubSubTokenFallback(optionalEnv("CAPITALFLOW_ENV"))) {
+      throw new HttpError(503, "gmail_pubsub_oidc_required");
+    }
     requireFallbackToken(request);
     return;
   }
@@ -26,16 +30,10 @@ export async function requireGooglePubSubAuth(request: Request): Promise<void> {
       audience,
       issuer: ["https://accounts.google.com", "accounts.google.com"],
     });
-    const expectedEmail = optionalEnv("GMAIL_PUBSUB_SERVICE_ACCOUNT_EMAIL");
-    if (expectedEmail && payload.email !== expectedEmail) {
-      throw new HttpError(401, "unexpected_pubsub_service_account");
-    }
-    if (payload.email && payload.email_verified !== true) {
-      throw new HttpError(401, "unverified_pubsub_service_account");
-    }
+    validateGooglePubSubClaims(payload, optionalEnv("GMAIL_PUBSUB_SERVICE_ACCOUNT_EMAIL"));
   } catch (error) {
     if (error instanceof HttpError) throw error;
-    console.warn("Invalid Google Pub/Sub OIDC token", error);
+    console.warn("Invalid Google Pub/Sub OIDC token");
     throw new HttpError(401, "invalid_pubsub_oidc_token");
   }
 }
