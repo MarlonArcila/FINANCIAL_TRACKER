@@ -88,7 +88,7 @@ export function OnboardingPage({ user, onComplete }: { user: AppUser; onComplete
     finally { setBusy(null); }
   }
 
-  async function connect(provider: "gmail" | "outlook"): Promise<void> {
+  async function connect(provider: "gmail"): Promise<void> {
     setBusy(provider); setError(null);
     try {
       if (demoMode) { await updateOnboardingState(user.id, { email_completed: true }); setMessage(`${provider} conectado en modo demo.`); await load(); return; }
@@ -189,12 +189,11 @@ export function OnboardingPage({ user, onComplete }: { user: AppUser; onComplete
 
         <article className={`panel onboarding-step ${emailReady ? "done" : ""}`}>
           <StepNumber value="3" done={emailReady} />
-          <h2>Correo financiero</h2><p>Conecta Gmail o Outlook. Después del OAuth se inicia automáticamente una primera sincronización.</p>
+          <h2>Correo financiero</h2><p>Conecta Gmail. Después del OAuth se inicia automáticamente una primera sincronización.</p>
           <div className="button-row">
             <button className="secondary-button" type="button" disabled={busy !== null} onClick={() => void connect("gmail")}>{connections.some((item) => item.provider === "gmail" && item.status === "active") ? "Gmail conectado" : "Conectar Gmail"}</button>
-            <button className="secondary-button" type="button" disabled={busy !== null} onClick={() => void connect("outlook")}>{connections.some((item) => item.provider === "outlook" && item.status === "active") ? "Outlook conectado" : "Conectar Outlook"}</button>
           </div>
-          <small>Solo necesitas una cuenta de correo. Puedes añadir la otra posteriormente.</small>
+          <small>CapitalFlow utiliza Gmail con permiso de lectura mínimo.</small>
         </article>
 
         <article className={`panel onboarding-step ${notificationReady ? "done" : ""}`}>

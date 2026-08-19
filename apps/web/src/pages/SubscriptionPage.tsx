@@ -154,12 +154,12 @@ export function SubscriptionPage({
 function FeatureList({ annual }: { annual: boolean }) {
   return (
     <ul className="feature-list">
-      <li>Registro automático desde Android, Gmail y Outlook</li>
+      <li>Registro automático desde Android y Gmail</li>
       <li>Aprendizaje de cuenta y categoría tras tus correcciones</li>
       <li>Importación desde Excel, CSV, TSV y JSON</li>
       <li>Metas, inversiones, multi‑moneda y asesor determinista</li>
       <li>{annual ? <strong>Cuentas independientes para viajes, trabajo y proyectos</strong> : "Una cuenta principal"}</li>
-      <li>{annual ? <strong>Backups/restores en Google Drive y OneDrive</strong> : "Sin backup/restore en nube"}</li>
+      <li>{annual ? <strong>Backups/restores en Google Drive</strong> : "Sin backup/restore en nube"}</li>
       <li>{annual ? <strong>Asesor y explicaciones con IA</strong> : "Sin funciones de IA"}</li>
     </ul>
   );

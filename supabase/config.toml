@@ -16,11 +16,7 @@ verify_jwt = false
 [functions.gmail-pubsub-webhook]
 verify_jwt = false
 
-[functions.outlook-oauth-callback]
-verify_jwt = false
 
-[functions.outlook-webhook]
-verify_jwt = false
 
 [functions.renew-mail-watches]
 verify_jwt = false

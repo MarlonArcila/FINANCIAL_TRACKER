@@ -1,6 +1,6 @@
 import { sha256Base64Url } from "./crypto.ts";
 
-export type Provider = "android_notification" | "gmail" | "outlook";
+export type Provider = "android_notification" | "gmail";
 export type CandidateKind = "income" | "expense";
 
 export interface ParsedCandidate {
@@ -31,7 +31,7 @@ const NOISE = /otp|one[- ]time password|c[oó]digo de verificaci[oó]n|clave din
 const FAILURE = /fallid[oa]|rechazad[oa]|declined|failed|cancelad[oa]/iu;
 
 export async function parseMailMessage(input: {
-  provider: "gmail" | "outlook";
+  provider: "gmail";
   externalId: string;
   occurredAt: string;
   sender: string | null;

@@ -11,7 +11,7 @@ Deno.serve(async (request) => {
     const service = createServiceClient();
     await assertAnnualEntitled(service, user.id);
     const body = await readJson<{ provider?: StorageProvider; returnUrl?: string }>(request, 20_000);
-    if (body.provider !== "google_drive" && body.provider !== "onedrive") throw new HttpError(422, "invalid_storage_provider");
+    if (body.provider !== "google_drive") throw new HttpError(422, "invalid_storage_provider");
     const app = new URL(requiredEnv("APP_URL"));
     const returnUrl = new URL(body.returnUrl || `${app.origin}/#/data`);
     if (returnUrl.origin !== app.origin) throw new HttpError(422, "invalid_return_url");

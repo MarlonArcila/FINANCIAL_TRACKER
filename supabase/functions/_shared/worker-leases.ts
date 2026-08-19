@@ -1,8 +1,8 @@
 import type { SupabaseClient } from "npm:@supabase/supabase-js@2";
 
-export interface MailSyncClaim { id: string; connection_id: string; provider: "gmail" | "outlook"; lease_token: string; }
-export interface WatchClaim { connection_id: string; provider: "gmail" | "outlook"; lease_token: string; }
-export interface BackupClaim { run_id: string; connection_id: string; user_id: string; provider: "google_drive" | "onedrive"; backup_frequency: "daily" | "weekly"; scheduled_for: string; lease_token: string; }
+export interface MailSyncClaim { id: string; connection_id: string; provider: "gmail"; lease_token: string; }
+export interface WatchClaim { connection_id: string; provider: "gmail"; lease_token: string; }
+export interface BackupClaim { run_id: string; connection_id: string; user_id: string; provider: "google_drive"; backup_frequency: "daily" | "weekly"; scheduled_for: string; lease_token: string; }
 
 export async function claimMailSyncJobs(service: SupabaseClient, limit: number, connectionId?: string): Promise<MailSyncClaim[]> {
   const { data, error } = await service.rpc("claim_mail_sync_jobs", { p_limit: limit, p_connection_id: connectionId ?? null, p_lease_seconds: 300 });

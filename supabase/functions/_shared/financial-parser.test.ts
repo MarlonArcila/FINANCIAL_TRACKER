@@ -23,8 +23,8 @@ test("mail parser extracts a COP expense and sanitizes account digits", async ()
 
 test("mail parser handles decimal currencies in minor units", async () => {
   const candidate = await parseMailMessage({
-    provider: "outlook",
-    externalId: "outlook-1",
+    provider: "gmail",
+    externalId: "gmail-1",
     occurredAt: "2026-08-12T14:00:00.000Z",
     sender: "Example Client",
     title: "Payment received",

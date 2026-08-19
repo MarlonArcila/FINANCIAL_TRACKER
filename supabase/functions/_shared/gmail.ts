@@ -8,7 +8,7 @@ import { loadTokens, saveTokens, type OAuthTokenSet } from "./tokens.ts";
 export interface MailConnection {
   id: string;
   user_id: string;
-  provider: "gmail" | "outlook";
+  provider: "gmail";
   email_address: string | null;
   cursor: string | null;
   watch_resource_id: string | null;

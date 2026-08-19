@@ -19,7 +19,7 @@ export async function buildBackupDocument(service: SupabaseClient, userId: strin
     generatedAt: new Date().toISOString(),
     data,
     excluded: [
-      "Whop subscription entitlement", "Gmail/Outlook connections and OAuth tokens", "cloud-storage OAuth tokens", "webhook secrets",
+      "Whop subscription entitlement", "Gmail connections and OAuth tokens", "cloud-storage OAuth tokens", "webhook secrets",
       "raw source events and transaction candidates", "advisor AI text and audit logs",
     ],
   };

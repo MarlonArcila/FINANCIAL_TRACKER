@@ -1,7 +1,6 @@
 import { requireCronSecret, requireWorkerEnabled } from "../_shared/cron.ts";
 import { configureGmailWatch, type MailConnection } from "../_shared/gmail.ts";
 import { errorResponse, handleOptions, HttpError, json } from "../_shared/http.ts";
-import { configureOutlookSubscription } from "../_shared/outlook.ts";
 import { createServiceClient } from "../_shared/supabase.ts";
 import { claimMailWatchConnections, releaseMailWatchLease, safeWorkerErrorCode } from "../_shared/worker-leases.ts";
 
@@ -17,7 +16,7 @@ Deno.serve(async (request) => {
       try {
         const { data: connection, error } = await service.from("source_connections").select("*").eq("id", claim.connection_id).single();
         if (error) throw error;
-        if (claim.provider === "gmail") await configureGmailWatch(service, connection as MailConnection); else await configureOutlookSubscription(service, connection as MailConnection);
+        await configureGmailWatch(service, connection as MailConnection);
         succeeded += 1;
       } catch (error) {
         failed += 1;

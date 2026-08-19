@@ -15,9 +15,9 @@ insert into public.subscriptions(id,user_id,interval,status,current_period_end) 
  ('00000000-0000-4000-8000-000000000386','00000000-0000-4000-8000-000000000086','annual','active',now()-interval '1 second');
 insert into public.storage_connections(id,user_id,provider,status,backup_frequency,next_backup_at) values
  ('00000000-0000-4000-8000-000000000482','00000000-0000-4000-8000-000000000082','google_drive','active','weekly',now()-interval '1 hour'),
- ('00000000-0000-4000-8000-000000000483','00000000-0000-4000-8000-000000000083','onedrive','active','daily',now()-interval '2 hours'),
+ ('00000000-0000-4000-8000-000000000483','00000000-0000-4000-8000-000000000083','google_drive','active','daily',now()-interval '2 hours'),
  ('00000000-0000-4000-8000-000000000484','00000000-0000-4000-8000-000000000084','google_drive','active','weekly',now()-interval '3 hours'),
- ('00000000-0000-4000-8000-000000000485','00000000-0000-4000-8000-000000000085','onedrive','active','weekly',now()-interval '4 hours'),
+ ('00000000-0000-4000-8000-000000000485','00000000-0000-4000-8000-000000000085','google_drive','active','weekly',now()-interval '4 hours'),
  ('00000000-0000-4000-8000-000000000486','00000000-0000-4000-8000-000000000086','google_drive','active','weekly',now()-interval '5 hours');
 
 set local role service_role;

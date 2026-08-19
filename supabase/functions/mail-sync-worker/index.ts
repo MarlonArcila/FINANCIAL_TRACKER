@@ -1,7 +1,6 @@
 import { requireCronSecret, requireWorkerEnabled } from "../_shared/cron.ts";
 import { syncGmailConnection, type MailConnection } from "../_shared/gmail.ts";
 import { errorResponse, handleOptions, HttpError, json } from "../_shared/http.ts";
-import { syncOutlookConnection } from "../_shared/outlook.ts";
 import { createServiceClient } from "../_shared/supabase.ts";
 import { claimMailSyncJobs, finishMailSyncJob, safeWorkerErrorCode, type MailSyncClaim } from "../_shared/worker-leases.ts";
 
@@ -28,7 +27,7 @@ async function processClaim(service: ReturnType<typeof createServiceClient>, cla
     if (error) throw error;
     const { data: profile, error: profileError } = await service.from("profiles").select("base_currency").eq("id", connection.user_id).single();
     if (profileError) throw profileError;
-    const result = claim.provider === "gmail" ? await syncGmailConnection(service, connection as MailConnection, profile.base_currency) : await syncOutlookConnection(service, connection as MailConnection, profile.base_currency);
+    const result = await syncGmailConnection(service, connection as MailConnection, profile.base_currency);
     const { data: refreshed } = await service.from("source_connections").select("cursor").eq("id", claim.connection_id).single();
     return await finishMailSyncJob(service, claim, "succeeded", { cursor: refreshed?.cursor ?? null, scanned: result.scanned, inserted: result.inserted, duplicates: result.duplicates });
   } catch (error) {

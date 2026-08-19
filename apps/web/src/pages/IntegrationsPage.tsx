@@ -43,7 +43,7 @@ export function IntegrationsPage({ user }: { user: AppUser }) {
 
   useEffect(() => { void load(); }, [load]);
 
-  async function connect(provider: "gmail" | "outlook"): Promise<void> {
+  async function connect(provider: "gmail"): Promise<void> {
     setBusy(provider);
     setError(null);
     setMessage(null);
@@ -63,7 +63,7 @@ export function IntegrationsPage({ user }: { user: AppUser }) {
     }
   }
 
-  async function syncMail(provider: "gmail" | "outlook"): Promise<void> {
+  async function syncMail(provider: "gmail"): Promise<void> {
     setBusy(`${provider}-sync`);
     setError(null);
     setMessage(null);
@@ -83,7 +83,7 @@ export function IntegrationsPage({ user }: { user: AppUser }) {
   }
 
 
-  async function disconnect(provider: "gmail" | "outlook"): Promise<void> {
+  async function disconnect(provider: "gmail"): Promise<void> {
     if (!window.confirm(`Desconectar ${provider} y eliminar sus credenciales locales?`)) return;
     setBusy(`${provider}-disconnect`);
     setError(null);
@@ -150,7 +150,6 @@ export function IntegrationsPage({ user }: { user: AppUser }) {
           )}
         </article>
         <MailCard provider="gmail" connection={connections.find((item) => item.provider === "gmail")} busy={busy} onConnect={connect} onSync={syncMail} onDisconnect={disconnect} />
-        <MailCard provider="outlook" connection={connections.find((item) => item.provider === "outlook")} busy={busy} onConnect={connect} onSync={syncMail} onDisconnect={disconnect} />
       </div>
       <article className="panel privacy-panel"><h2>Minimización de datos</h2><p>La implementación almacena identificadores externos, remitente normalizado, asunto/fragmento sanitizado y campos financieros inferidos. No debe conservar cuerpos completos ni adjuntos por defecto. Los tokens OAuth viven cifrados en un esquema privado del backend.</p></article>
     </section>
@@ -158,17 +157,17 @@ export function IntegrationsPage({ user }: { user: AppUser }) {
 }
 
 function MailCard({ provider, connection, busy, onConnect, onSync, onDisconnect }: {
-  provider: "gmail" | "outlook";
+  provider: "gmail";
   connection: SourceConnection | undefined;
   busy: string | null;
-  onConnect(provider: "gmail" | "outlook"): Promise<void>;
-  onSync(provider: "gmail" | "outlook"): Promise<void>;
-  onDisconnect(provider: "gmail" | "outlook"): Promise<void>;
+  onConnect(provider: "gmail"): Promise<void>;
+  onSync(provider: "gmail"): Promise<void>;
+  onDisconnect(provider: "gmail"): Promise<void>;
 }) {
-  const title = provider === "gmail" ? "Gmail" : "Outlook / Microsoft 365";
+  const title = "Gmail";
   return (
     <article className="integration-card">
-      <div className="integration-icon">{provider === "gmail" ? "G" : "O"}</div>
+      <div className="integration-icon">G</div>
       <div><span className="eyebrow">CORREO</span><h2>{title}</h2></div>
       {connection ? <p><strong>{connection.email_address ?? "Cuenta vinculada"}</strong><br /><small>Estado {connection.status}{connection.last_sync_at ? ` · última sincronización ${new Date(connection.last_sync_at).toLocaleString("es-CO")}` : ""}</small></p> : <p>Conecta por OAuth con permiso de lectura mínimo para detectar mensajes financieros.</p>}
       {connection?.last_error ? <Notice tone="warning">{connection.last_error}</Notice> : null}

@@ -3,7 +3,7 @@ import type { SupabaseClient } from "npm:@supabase/supabase-js@2";
 export async function enqueueMailSync(
   service: SupabaseClient,
   connectionId: string,
-  provider: "gmail" | "outlook",
+  provider: "gmail",
   cursorBefore: string | null,
 ): Promise<{ queued: boolean; jobId: string | null }> {
   const { data: existing, error: existingError } = await service

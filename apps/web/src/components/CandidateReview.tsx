@@ -109,7 +109,7 @@ export function CandidateReview({
 function providerLabel(provider: TransactionCandidate["provider"]): string {
   if (provider === "android_notification") return "Notificación Android";
   if (provider === "gmail") return "Gmail";
-  return "Outlook";
+  return "Fuente";
 }
 
 function reviewReasonLabel(reason: string): string {

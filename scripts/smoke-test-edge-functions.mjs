@@ -20,7 +20,7 @@ if (!smokeTestImport) try {
 const protectedFunctions = [
   "account-manage", "ai-advisor", "cloud-backup-create", "cloud-backup-restore", "delete-account",
   "disconnect-source", "export-data", "fx-rate", "gmail-oauth-start", "gmail-sync", "import-transactions",
-  "notification-ingest", "outlook-oauth-start", "outlook-sync", "storage-backup-settings", "storage-disconnect",
+  "notification-ingest", "storage-backup-settings", "storage-disconnect",
   "storage-oauth-start", "transaction-confirm", "whop-checkout",
 ];
 const workerFunctions = ["mail-sync-worker", "renew-mail-watches", "cloud-backup-worker"];
@@ -99,7 +99,7 @@ for (const functionName of workerFunctions) {
   });
 }
 
-for (const functionName of ["gmail-oauth-callback", "outlook-oauth-callback", "storage-oauth-callback"]) {
+for (const functionName of ["gmail-oauth-callback", "storage-oauth-callback"]) {
   await request(
     functionName,
     "random_nonexistent_oauth_state",
@@ -120,7 +120,6 @@ await request(
 );
 await request("gmail-pubsub-webhook", "missing_oidc", postJson({}), "401_or_403_or_503", controlledProviderFailure);
 await request(
-  "outlook-webhook",
   "invalid_client_state",
   postJson({ value: [{ subscriptionId: "smoke-invalid", clientState: "invalid" }] }),
   "401_or_403_or_503",
@@ -129,11 +128,11 @@ await request(
 
 if (smokeUserJwt) {
   const authorized = { authorization: `Bearer ${smokeUserJwt}` };
-  for (const functionName of ["gmail-oauth-start", "outlook-oauth-start", "storage-oauth-start", "whop-checkout"]) {
+  for (const functionName of ["gmail-oauth-start", "storage-oauth-start", "whop-checkout"]) {
     await request(functionName, "provider_not_configured_with_user", postJson({}, authorized), "controlled_non_2xx", (status) => status >= 400 && status < 600);
   }
 } else {
-  for (const functionName of ["gmail-oauth-start", "outlook-oauth-start", "storage-oauth-start", "whop-checkout"]) {
+  for (const functionName of ["gmail-oauth-start", "storage-oauth-start", "whop-checkout"]) {
     results.push({ functionName, test: "provider_not_configured_with_user", expected: "controlled_non_2xx", status: "SKIP", outcome: "SKIP", notes: "SMOKE_USER_JWT_not_supplied" });
   }
 }

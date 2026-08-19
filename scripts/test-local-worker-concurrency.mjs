@@ -198,13 +198,12 @@ async function runManualVsWorker(fixture) {
   const { connectionId, jobId } = fixture;
   const files = await Promise.all([
     readFile(new URL("../supabase/functions/gmail-sync/index.ts", import.meta.url), "utf8"),
-    readFile(new URL("../supabase/functions/outlook-sync/index.ts", import.meta.url), "utf8"),
     readFile(new URL("../supabase/functions/mail-sync-worker/index.ts", import.meta.url), "utf8"),
     readFile(new URL("../supabase/functions/_shared/worker-leases.ts", import.meta.url), "utf8"),
   ]);
-  const [gmail, outlook, worker, leases] = files;
+  const [gmail, worker, leases] = files;
   const sharedBoundary = (source) => source.includes("claimMailSyncJobs") && source.includes("connection.id");
-  if (!sharedBoundary(gmail) || !sharedBoundary(outlook) || !worker.includes("claimMailSyncJobs") || !leases.includes('rpc("claim_mail_sync_jobs"')) throw new Error("manual_worker_boundary_missing");
+  if (!sharedBoundary(gmail) || !worker.includes("claimMailSyncJobs") || !leases.includes('rpc("claim_mail_sync_jobs"')) throw new Error("manual_worker_boundary_missing");
   let leaseOwner = null;
   const mockRpc = async (name, args) => {
     if (name !== "claim_mail_sync_jobs" || args.p_connection_id !== connectionId) throw new Error("manual_worker_boundary_args");

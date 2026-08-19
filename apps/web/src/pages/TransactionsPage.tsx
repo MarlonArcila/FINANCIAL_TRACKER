@@ -205,7 +205,6 @@ export function TransactionsPage({ userId }: { userId: string }) {
 function sourceLabel(source: Transaction["source"]): string {
   if (source === "android_notification") return "Notificación Android";
   if (source === "gmail") return "Gmail";
-  if (source === "outlook") return "Outlook";
   if (source === "import_file") return "Importación";
   if (source === "manual") return "Registro manual";
   return "Sistema";
