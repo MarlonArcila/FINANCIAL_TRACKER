@@ -73,7 +73,7 @@ export async function configureGmailWatch(
   accessToken?: string,
 ): Promise<void> {
   const topicName = optionalEnv("GMAIL_PUBSUB_TOPIC");
-  if (!topicName) return;
+  if (!topicName) throw new Error("gmail_pubsub_topic_not_configured");
   const token = accessToken ?? await getGoogleAccessToken(service, connection.id);
   const response = await googleFetch(token, "https://gmail.googleapis.com/gmail/v1/users/me/watch", {
     method: "POST",
