@@ -1,0 +1,56 @@
+# Goal Template — CapitalFlow
+
+```md
+GOAL_ID: PASO-X...
+TITLE:
+SOURCE_REQUIREMENT:
+PRD_REFERENCE:
+TECHNICAL_TASK_REFERENCE:
+
+OBJECTIVE:
+
+IN_SCOPE:
+-
+
+OUT_OF_SCOPE:
+-
+
+FILES_EXPECTED:
+-
+
+INVARIANTS:
+-
+
+SECURITY_BOUNDARIES:
+- No leer ni imprimir secretos.
+- No tocar proveedores, infraestructura remota o producción.
+
+ACCEPTANCE_CRITERIA:
+-
+
+VALIDATION_COMMANDS:
+- npm run typecheck
+- git diff --check
+
+REGRESSION_TESTS:
+-
+
+HUMAN_GATES:
+-
+
+ROLLBACK_STRATEGY:
+- Revertir sólo los cambios propios y reversibles, preservando trabajo preexistente.
+
+STATUS: DISCOVER | PLAN | IMPLEMENT | VALIDATING | BLOCKED | COMPLETE
+
+DISCOVER_NOTES:
+
+IMPLEMENTATION_NOTES:
+
+TEST_RESULTS:
+
+OPEN_RISKS:
+-
+
+FINAL_DECISION: GO | NO-GO | BLOCKED_EXTERNAL | BLOCKED_SECRET | BLOCKED_INFRASTRUCTURE | BLOCKED_HUMAN_DECISION
+```

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { HttpError, errorResponse, safeErrorLogRecord } from "./http.ts";
-import { requireCronSecret } from "./cron.ts";
+import { isWorkerEnabled, requireCronSecret } from "./cron.ts";
 import { canConsumeStorageOAuthState, canUseGmailPubSubTokenFallback, requireWhopWebhookSecret, validateGooglePubSubClaims, verifyConfiguredWhopSignature } from "./external-auth.ts";
 import { canConsumeOAuthState, consumeOAuthState, requireOAuthCallbackState } from "./oauth-state.ts";
 import { consumeStorageOAuthState } from "./storage-oauth.ts";
@@ -31,6 +31,13 @@ test("rejects expired and already consumed storage OAuth states", () => {
   assert.equal(canConsumeStorageOAuthState({ expires_at: "2026-08-15T11:59:59.000Z", used_at: null }, now), false);
   assert.equal(canConsumeStorageOAuthState({ expires_at: "2026-08-15T12:01:00.000Z", used_at: "2026-08-15T11:00:00.000Z" }, now), false);
   assert.equal(canConsumeStorageOAuthState({ expires_at: "not-a-date", used_at: null }, now), false);
+});
+
+test("worker flags default to disabled and require explicit true", () => {
+  assert.equal(isWorkerEnabled(null), false);
+  assert.equal(isWorkerEnabled("false"), false);
+  assert.equal(isWorkerEnabled("true"), true);
+  assert.equal(isWorkerEnabled("TRUE"), true);
 });
 
 test("rejects an invalid CRON secret", () => {

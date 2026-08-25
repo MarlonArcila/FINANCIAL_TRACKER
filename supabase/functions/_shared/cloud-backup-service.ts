@@ -17,7 +17,8 @@ export async function performCloudBackup(
   userId: string,
   connection: BackupConnection,
   kind: "manual" | "scheduled" | "pre_restore" = "manual",
-): Promise<{ id: string; filename: string; bytes: number; checksum: string }> {
+  backupRunId?: string,
+): Promise<{ id: string; remoteFileId: string; filename: string; bytes: number; checksum: string }> {
   if (connection.user_id !== userId || connection.status !== "active") throw new Error("active_storage_connection_required");
   const accessToken = await getStorageAccessToken(service, { id: connection.id, provider: connection.provider });
   const document = await buildBackupDocument(service, userId);
@@ -25,11 +26,12 @@ export async function performCloudBackup(
   const checksum = await sha256Hex(content);
   const stamp = new Date().toISOString().replace(/[:.]/gu, "-");
   const prefix = kind === "pre_restore" ? "capitalflow-pre-restore" : "capitalflow-backup";
-  const filename = `${prefix}-${stamp}.json`;
-  const uploaded = await uploadBackupFile(connection.provider, accessToken, filename, content);
+  const filename = backupRunId ? "capitalflow-backup-run-" + backupRunId + ".json" : prefix + "-" + stamp + ".json";
+  const uploaded = await uploadBackupFile(connection.provider, accessToken, filename, content, backupRunId);
   const bytes = new TextEncoder().encode(content).length;
-  const { data: record, error } = await service.from("cloud_backups").insert({
+  const { data: record, error } = await service.from("cloud_backups").upsert({
     user_id: userId,
+    backup_run_id: backupRunId ?? null,
     storage_connection_id: connection.id,
     provider: connection.provider,
     remote_file_id: uploaded.id,
@@ -37,10 +39,10 @@ export async function performCloudBackup(
     checksum_sha256: checksum,
     bytes,
     kind,
-  }).select("id").single();
+  }, { onConflict: "backup_run_id" }).select("id").single();
   if (error) throw error;
   await service.from("storage_connections").update({ last_backup_at: new Date().toISOString(), last_error: null }).eq("id", connection.id);
-  return { id: record.id, filename: uploaded.name, bytes, checksum };
+  return { id: record.id, remoteFileId: uploaded.id, filename: uploaded.name, bytes, checksum };
 }
 
 export function nextBackupAt(frequency: "manual" | "daily" | "weekly", from = new Date()): string | null {
