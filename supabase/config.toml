@@ -29,3 +29,12 @@ verify_jwt = false
 
 [functions.cloud-backup-worker]
 verify_jwt = false
+
+[functions.gmail-oauth-start]
+verify_jwt = false
+
+[functions.gmail-sync]
+verify_jwt = false
+
+[functions.disconnect-source]
+verify_jwt = false

@@ -16,21 +16,57 @@ export function canConsumeOAuthState(state: StoredOAuthState | null, provider: "
 
 export async function createOAuthState(
   service: SupabaseClient,
-  input: { userId: string; provider: "gmail"; returnUrl: string },
-): Promise<{ state: string; codeVerifier: string; codeChallenge: string }> {
+  input: {
+    userId: string;
+    provider: "gmail";
+    returnUrl: string;
+  },
+): Promise<{
+  state: string;
+  codeChallenge: string;
+}> {
   const state = randomBase64Url(32);
   const codeVerifier = randomBase64Url(48);
-  const [stateHash, codeChallenge] = await Promise.all([sha256Base64Url(state), pkceChallenge(codeVerifier)]);
-  const { error } = await service.schema("private").from("oauth_states").insert({
-    state_hash: stateHash,
-    user_id: input.userId,
-    provider: input.provider,
-    code_verifier: codeVerifier,
-    return_url: input.returnUrl,
-    expires_at: new Date(Date.now() + 10 * 60_000).toISOString(),
-  });
-  if (error) throw error;
-  return { state, codeVerifier, codeChallenge };
+
+  const [stateHash, codeChallenge] =
+    await Promise.all([
+      sha256Base64Url(state),
+      pkceChallenge(codeVerifier),
+    ]);
+
+  const expiresAt =
+    new Date(
+      Date.now() + 10 * 60_000,
+    ).toISOString();
+
+  const { error } = await service.rpc(
+    "create_mail_oauth_state",
+    {
+      p_state_hash: stateHash,
+      p_user_id: input.userId,
+      p_code_verifier: codeVerifier,
+      p_return_url: input.returnUrl,
+      p_expires_at: expiresAt,
+    },
+  );
+
+  if (error) {
+    console.error(JSON.stringify({
+      event: "oauth_state_create_failed",
+      provider: "gmail",
+      error_code: error.code ?? null,
+    }));
+
+    throw new HttpError(
+      503,
+      "oauth_state_service_unavailable",
+    );
+  }
+
+  return {
+    state,
+    codeChallenge,
+  };
 }
 
 export async function consumeOAuthState(

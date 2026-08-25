@@ -14,10 +14,27 @@ export async function invokeFunction<TResponse>(
   if (!accessToken) throw new Error("Sesión requerida.");
 
   if (!env.functionsBaseUrl) {
-    const options = body === undefined ? {} : { body };
-    const { data, error } = await client.functions.invoke<TResponse>(functionName, options);
+    client.functions.setAuth(accessToken);
+
+    const options =
+      body === undefined
+        ? {}
+        : { body };
+
+    const { data, error } =
+      await client.functions.invoke<TResponse>(
+        functionName,
+        options,
+      );
+
     if (error) throw error;
-    if (data === null) throw new Error(`Function ${functionName} returned no data.`);
+
+    if (data === null) {
+      throw new Error(
+        `Function ${functionName} returned no data.`,
+      );
+    }
+
     return data;
   }
 

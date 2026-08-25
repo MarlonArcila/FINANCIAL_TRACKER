@@ -17,11 +17,62 @@ export function createRequestClient(request: Request): SupabaseClient {
   });
 }
 
-export async function requireUser(request: Request): Promise<{ user: User; client: SupabaseClient }> {
-  const client = createRequestClient(request);
-  const { data, error } = await client.auth.getUser();
-  if (error || !data.user) throw new HttpError(401, "authentication_required");
-  return { user: data.user, client };
+export async function requireUser(
+  request: Request,
+): Promise<{ user: User; client: SupabaseClient }> {
+  const authorization =
+    request.headers.get("authorization")?.trim() ?? "";
+
+  const bearerMatch =
+    /^Bearer\s+([^\s]+)$/i.exec(authorization);
+
+  const accessToken = bearerMatch?.[1];
+
+  if (!accessToken) {
+    console.warn(JSON.stringify({
+      event: "authentication_rejected",
+      stage: "bearer_extraction",
+      authorization_present: authorization.length > 0,
+    }));
+
+    throw new HttpError(
+      401,
+      "authentication_required",
+    );
+  }
+
+  /*
+   * Stateless Edge Function authentication:
+   *
+   * - verify the user's JWT explicitly against Supabase Auth;
+   * - use the server-side credential only as the API credential
+   *   for that verification request;
+   * - never trust claims obtained merely by decoding the JWT;
+   * - return a separate request-scoped client so RLS continues
+   *   to execute as the authenticated user.
+   */
+  const verifier = createServiceClient();
+
+  const { data, error } =
+    await verifier.auth.getUser(accessToken);
+
+  if (error || !data.user) {
+    console.warn(JSON.stringify({
+      event: "authentication_rejected",
+      stage: "service_auth_get_user",
+      error_name: error?.name ?? null,
+    }));
+
+    throw new HttpError(
+      401,
+      "authentication_required",
+    );
+  }
+
+  return {
+    user: data.user,
+    client: createRequestClient(request),
+  };
 }
 
 export async function assertEntitled(service: SupabaseClient, userId: string): Promise<void> {

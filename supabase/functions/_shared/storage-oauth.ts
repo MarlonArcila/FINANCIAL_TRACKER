@@ -26,31 +26,52 @@ export async function createStorageOAuthState(
     provider: StorageProvider;
     returnUrl: string;
   },
-): Promise<{ state: string; codeChallenge: string }> {
-  requireGoogleDriveProvider(input.provider);
-
+): Promise<{
+  state: string;
+  codeChallenge: string;
+}> {
   const state = randomBase64Url(32);
   const codeVerifier = randomBase64Url(48);
-  const [stateHash, codeChallenge] = await Promise.all([
-    sha256Base64Url(state),
-    pkceChallenge(codeVerifier),
-  ]);
 
-  const { error } = await service
-    .schema("private")
-    .from("storage_oauth_states")
-    .insert({
-      state_hash: stateHash,
-      user_id: input.userId,
+  const [stateHash, codeChallenge] =
+    await Promise.all([
+      sha256Base64Url(state),
+      pkceChallenge(codeVerifier),
+    ]);
+
+  const expiresAt =
+    new Date(
+      Date.now() + 10 * 60_000,
+    ).toISOString();
+
+  const { error } = await service.rpc(
+    "create_storage_oauth_state",
+    {
+      p_state_hash: stateHash,
+      p_user_id: input.userId,
+      p_code_verifier: codeVerifier,
+      p_return_url: input.returnUrl,
+      p_expires_at: expiresAt,
+    },
+  );
+
+  if (error) {
+    console.error(JSON.stringify({
+      event: "oauth_state_create_failed",
       provider: "google_drive",
-      code_verifier: codeVerifier,
-      return_url: input.returnUrl,
-      expires_at: new Date(Date.now() + 10 * 60_000).toISOString(),
-    });
+      error_code: error.code ?? null,
+    }));
 
-  if (error) throw error;
+    throw new HttpError(
+      503,
+      "oauth_state_service_unavailable",
+    );
+  }
 
-  return { state, codeChallenge };
+  return {
+    state,
+    codeChallenge,
+  };
 }
 
 export async function consumeStorageOAuthState(

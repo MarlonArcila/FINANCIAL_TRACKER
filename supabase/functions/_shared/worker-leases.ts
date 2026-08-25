@@ -47,6 +47,41 @@ export async function finishCloudBackupRun(service: SupabaseClient, claim: Backu
 }
 
 export function safeWorkerErrorCode(error: unknown): string {
-  const value = error instanceof Error ? error.message : "worker_failed";
-  return /^[a-z0-9_:-]{1,80}$/iu.test(value) ? value : "worker_failed";
+  if (error && typeof error === "object") {
+    const record = error as Record<string, unknown>;
+
+    const code =
+      typeof record.code === "string"
+        ? record.code
+        : null;
+
+    if (
+      code &&
+      /^[a-z0-9_:-]{1,60}$/iu.test(code)
+    ) {
+      return `postgrest:${code}`.slice(0, 80);
+    }
+
+    const status =
+      typeof record.status === "number"
+        ? record.status
+        : null;
+
+    if (
+      status &&
+      Number.isInteger(status)
+    ) {
+      return `http:${status}`;
+    }
+  }
+
+  if (error instanceof Error) {
+    const value = error.message.trim();
+
+    if (/^[a-z0-9_:-]{1,80}$/iu.test(value)) {
+      return value;
+    }
+  }
+
+  return "worker_failed";
 }
