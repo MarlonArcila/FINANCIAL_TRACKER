@@ -14,10 +14,14 @@ export function optionalEnv(name: string, read: EnvReader = readDenoEnv): string
 
 /**
  * Resolves a named key from Supabase's hosted JSON key maps. A configured map
- * must be valid and contain a non-empty `default` key; silently falling back
+ * must be valid and contain the requested non-empty key; silently falling back
  * could accidentally select a stale local or legacy credential in production.
  */
-export function keyFromSupabaseMap(name: string, read: EnvReader = readDenoEnv): string | null {
+export function keyFromSupabaseMap(
+  name: string,
+  read: EnvReader = readDenoEnv,
+  keyName = "default",
+): string | null {
   const raw = optionalEnv(name, read);
   if (!raw) return null;
 
@@ -31,9 +35,9 @@ export function keyFromSupabaseMap(name: string, read: EnvReader = readDenoEnv):
     throw new Error(`Environment variable ${name} must be a JSON object`);
   }
 
-  const value = (parsed as Record<string, unknown>).default;
+  const value = (parsed as Record<string, unknown>)[keyName];
   if (typeof value !== "string" || !value.trim()) {
-    throw new Error(`Environment variable ${name} must contain a non-empty default key`);
+    throw new Error(`Environment variable ${name} must contain a non-empty ${keyName} key`);
   }
   return value.trim();
 }
@@ -44,9 +48,12 @@ function resolveSupabaseKey(mapName: string, localName: string, legacyName: stri
     ?? requiredEnv(legacyName, read);
 }
 
-/** Hosted current key map -> local CLI single key -> legacy service_role key. */
+/** Hosted named key map -> local CLI single key -> legacy service_role key. */
 export function serviceKey(read: EnvReader = readDenoEnv): string {
-  return resolveSupabaseKey("SUPABASE_SECRET_KEYS", "SUPABASE_SECRET_KEY", "SUPABASE_SERVICE_ROLE_KEY", read);
+  const keyName = optionalEnv("CAPITALFLOW_SUPABASE_SECRET_KEY_NAME", read) ?? "default";
+  return keyFromSupabaseMap("SUPABASE_SECRET_KEYS", read, keyName)
+    ?? optionalEnv("SUPABASE_SECRET_KEY", read)
+    ?? requiredEnv("SUPABASE_SERVICE_ROLE_KEY", read);
 }
 
 /** Hosted current key map -> local CLI single key -> legacy anon key. */

@@ -41,3 +41,27 @@ test("rejects malformed or incomplete hosted key maps", () => {
   assert.throws(() => keyFromSupabaseMap("SUPABASE_SECRET_KEYS", from({ SUPABASE_SECRET_KEYS: "not-json" })), /Invalid JSON/);
   assert.throws(() => keyFromSupabaseMap("SUPABASE_SECRET_KEYS", from({ SUPABASE_SECRET_KEYS: JSON.stringify({ secondary: "key" }) })), /default key/);
 });
+
+
+test("selects an explicitly named hosted secret key during rotation", () => {
+  const read = from({
+    SUPABASE_SECRET_KEYS: JSON.stringify({
+      default: "old-secret",
+      "capitalflow-backend-20260825": "rotated-secret",
+    }),
+    CAPITALFLOW_SUPABASE_SECRET_KEY_NAME: "capitalflow-backend-20260825",
+    SUPABASE_SECRET_KEY: "local-secret",
+    SUPABASE_SERVICE_ROLE_KEY: "legacy-service-role",
+  });
+  assert.equal(serviceKey(read), "rotated-secret");
+});
+
+test("fails closed when the configured hosted secret key name is absent", () => {
+  const read = from({
+    SUPABASE_SECRET_KEYS: JSON.stringify({ default: "old-secret" }),
+    CAPITALFLOW_SUPABASE_SECRET_KEY_NAME: "capitalflow-backend-20260825",
+    SUPABASE_SECRET_KEY: "local-secret",
+    SUPABASE_SERVICE_ROLE_KEY: "legacy-service-role",
+  });
+  assert.throws(() => serviceKey(read), /capitalflow-backend-20260825 key/);
+});
