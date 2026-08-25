@@ -8,7 +8,7 @@ import { loadTokens, saveTokens, type OAuthTokenSet } from "./tokens.ts";
 export interface MailConnection {
   id: string;
   user_id: string;
-  provider: "gmail" | "outlook";
+  provider: "gmail";
   email_address: string | null;
   cursor: string | null;
   watch_resource_id: string | null;
@@ -30,7 +30,7 @@ export async function exchangeGoogleCode(code: string, codeVerifier: string): Pr
     }),
   });
   const payload = await response.json() as Record<string, unknown>;
-  if (!response.ok || typeof payload.access_token !== "string") throw new Error("Google token exchange failed");
+  if (!response.ok || typeof payload.access_token !== "string") throw new Error(`google_token_exchange_${response.status}`);
   return {
     accessToken: payload.access_token,
     refreshToken: typeof payload.refresh_token === "string" ? payload.refresh_token : null,
@@ -58,7 +58,7 @@ export async function getGoogleAccessToken(service: SupabaseClient, connectionId
     }),
   });
   const payload = await response.json() as Record<string, unknown>;
-  if (!response.ok || typeof payload.access_token !== "string") throw new Error("Google token refresh failed");
+  if (!response.ok || typeof payload.access_token !== "string") throw new Error(`google_token_refresh_${response.status}`);
   await saveTokens(service, connectionId, {
     accessToken: payload.access_token,
     refreshToken: tokens.refreshToken,
@@ -81,13 +81,15 @@ export async function configureGmailWatch(
     body: JSON.stringify({ topicName, labelIds: ["INBOX"], labelFilterBehavior: "include" }),
   });
   const payload = await response.json() as { historyId?: string; expiration?: string };
-  await service.from("source_connections").update({
+  const { error: watchUpdateError } = await service.from("source_connections").update({
     cursor: payload.historyId ?? connection.cursor,
     watch_resource_id: topicName,
     watch_expires_at: payload.expiration ? new Date(Number(payload.expiration)).toISOString() : null,
     status: "active",
     last_error: null,
   }).eq("id", connection.id);
+
+  if (watchUpdateError) throw watchUpdateError;
 }
 
 export async function syncGmailConnection(
@@ -188,7 +190,7 @@ async function googleFetch(accessToken: string, url: string, init: RequestInit =
   const headers = new Headers(init.headers);
   headers.set("authorization", `Bearer ${accessToken}`);
   const response = await fetch(url, { ...init, headers });
-  if (!response.ok) throw new Error(`Gmail API  failed`);
+  if (!response.ok) throw new Error(`gmail_api_${response.status}`);
   return response;
 }
 

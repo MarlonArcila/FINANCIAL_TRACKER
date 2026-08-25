@@ -32,9 +32,18 @@ Deno.serve(async (request) => {
     await saveTokens(service, connection.id, tokens);
     await configureGmailWatch(service, connection, tokens.accessToken);
     await enqueueMailSync(service, connection.id, "gmail", null);
-    await service.schema("private").from("audit_events").insert({
-      user_id: oauth.userId, actor: "google", action: "gmail.connected", entity_type: "source_connection", entity_id: connection.id,
-    });
+    const { error: auditError } = await service.rpc(
+      "service_record_audit_event",
+      {
+        p_user_id: oauth.userId,
+        p_actor: "google",
+        p_action: "gmail.connected",
+        p_entity_type: "source_connection",
+        p_entity_id: connection.id,
+      },
+    );
+
+    if (auditError) throw auditError;
     return Response.redirect(withResult(oauth.returnUrl, "gmail", "connected"), 302);
   } catch (error) {
     return errorResponse(error);

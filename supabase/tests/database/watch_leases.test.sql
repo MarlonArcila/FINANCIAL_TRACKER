@@ -6,7 +6,7 @@ insert into auth.users(id, email) values
   ('00000000-0000-4000-8000-000000000093', 'watch-c@example.invalid');
 insert into public.source_connections(id, user_id, provider, status, watch_expires_at) values
   ('00000000-0000-4000-8000-000000000191', '00000000-0000-4000-8000-000000000091', 'gmail', 'active', now() - interval '1 hour'),
-  ('00000000-0000-4000-8000-000000000192', '00000000-0000-4000-8000-000000000092', 'outlook', 'active', now() + interval '3 days'),
+  ('00000000-0000-4000-8000-000000000192', '00000000-0000-4000-8000-000000000092', 'gmail', 'active', now() + interval '3 days'),
   ('00000000-0000-4000-8000-000000000193', '00000000-0000-4000-8000-000000000093', 'gmail', 'revoked', NULL);
 
 set local role service_role;

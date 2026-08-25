@@ -8,8 +8,8 @@ Deno.serve(async (request) => {
   try {
     if (request.method !== "POST") throw new HttpError(405, "method_not_allowed");
     const { user } = await requireUser(request);
-    const body = await readJson<{ provider?: "gmail" | "outlook" }>(request, 10_000);
-    if (body.provider !== "gmail" && body.provider !== "outlook") throw new HttpError(422, "invalid_provider");
+    const body = await readJson<{ provider?: "gmail" }>(request, 10_000);
+    if (body.provider !== "gmail") throw new HttpError(422, "invalid_provider");
     const service = createServiceClient();
     const { data: connection, error } = await service
       .from("source_connections")

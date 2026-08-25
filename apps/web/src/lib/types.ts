@@ -60,7 +60,7 @@ export interface Transaction {
   merchant: string | null;
   description: string | null;
   occurred_at: string;
-  source: "manual" | "android_notification" | "gmail" | "outlook" | "system" | "import_file";
+  source: "manual" | "android_notification" | "gmail" | "system" | "import_file";
   auto_posted?: boolean;
   created_at: string;
 }
@@ -113,7 +113,7 @@ export interface Investment {
 
 export interface SourceConnection {
   id: string;
-  provider: "gmail" | "outlook";
+  provider: "gmail";
   email_address: string | null;
   status: "active" | "expired" | "revoked" | "error" | "pending";
   last_sync_at: string | null;
@@ -191,11 +191,11 @@ export interface DataImportRecord {
 }
 
 export interface StorageConnection {
-  id: string; provider: "google_drive" | "onedrive"; account_label: string | null; status: "active" | "expired" | "revoked" | "error" | "pending";
+  id: string; provider: "google_drive"; account_label: string | null; status: "active" | "expired" | "revoked" | "error" | "pending";
   last_backup_at: string | null; last_restore_at: string | null; last_error: string | null; backup_frequency: "manual" | "daily" | "weekly"; next_backup_at: string | null;
 }
 
 export interface CloudBackup {
-  id: string; provider: "google_drive" | "onedrive"; remote_file_id: string; remote_file_name: string; bytes: number; kind: "manual" | "scheduled" | "pre_restore";
+  id: string; provider: "google_drive"; remote_file_id: string; remote_file_name: string; bytes: number; kind: "manual" | "scheduled" | "pre_restore";
   status: "available" | "restored" | "missing" | "error"; created_at: string; restored_at: string | null;
 }
