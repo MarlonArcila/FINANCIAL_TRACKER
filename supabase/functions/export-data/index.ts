@@ -15,10 +15,10 @@ Deno.serve(async (request) => {
   if (preflight) return preflight;
   try {
     if (request.method !== "POST") throw new HttpError(405, "method_not_allowed");
-    const { user } = await requireUser(request);
+    const { user, client } = await requireUser(request);
     const service = createServiceClient();
     const exported: Record<string, unknown[]> = {};
-    for (const table of TABLES) exported[table] = await fetchAllForUser(service, table, user.id);
+    for (const table of TABLES) exported[table] = await fetchAllForUser(client, table, user.id);
 
     const document = {
       exportFormat: "capitalflow-json-v1",
