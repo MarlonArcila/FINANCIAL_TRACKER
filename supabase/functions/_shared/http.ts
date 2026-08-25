@@ -35,13 +35,34 @@ export async function readJson<T>(request: Request, maxBytes = 200_000): Promise
 }
 
 export class HttpError extends Error {
-  constructor(public readonly status: number, message: string, public readonly details?: unknown) {
+  readonly status: number;
+  readonly details: unknown;
+
+  constructor(status: number, message: string, details?: unknown) {
     super(message);
+    this.status = status;
+    this.details = details;
   }
 }
 
 export function errorResponse(error: unknown): Response {
   if (error instanceof HttpError) return json({ error: error.message, details: error.details ?? null }, error.status);
-  console.error(error);
+  console.error(JSON.stringify(safeErrorLogRecord(error)));
   return json({ error: "internal_error" }, 500);
 }
+
+export function safeErrorLogRecord(error: unknown): { event: "edge_function_failure"; error_type: "postgrest" | "http" | "error" | "unknown"; error_code: string | null; status: number | null } {
+  const value = isRecord(error) ? error : {};
+  const code = safeCode(value.code);
+  const status = safeStatus(value.status);
+  return {
+    event: "edge_function_failure",
+    error_type: error instanceof HttpError ? "http" : code?.startsWith("PGRST") || /^[0-9A-Z]{5}$/u.test(code ?? "") ? "postgrest" : error instanceof Error ? "error" : "unknown",
+    error_code: code,
+    status,
+  };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> { return Boolean(value) && typeof value === "object" && !Array.isArray(value); }
+function safeCode(value: unknown): string | null { return typeof value === "string" && /^[A-Za-z0-9_]{1,32}$/u.test(value) ? value : null; }
+function safeStatus(value: unknown): number | null { return typeof value === "number" && Number.isInteger(value) && value >= 100 && value <= 599 ? value : null; }

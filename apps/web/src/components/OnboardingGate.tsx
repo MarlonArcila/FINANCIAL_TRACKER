@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState, type ReactNode } from "react";
 
 import { LoadingScreen } from "./LoadingScreen";
 import { loadOnboardingState, loadProfile, updateOnboardingState } from "../lib/data";
+import { env } from "../lib/env";
 import { getNotificationPermission, isAndroidNative } from "../lib/notificationAccess";
 import type { AppUser } from "../lib/types";
 import { OnboardingPage } from "../pages/OnboardingPage";
@@ -12,6 +13,11 @@ export function OnboardingGate({ user, children }: { user: AppUser; children: Re
 
   const refresh = useCallback(async () => {
     try {
+      if (env.devBypassOnboarding) {
+        setComplete(true);
+        setError(null);
+        return;
+      }
       const [profile, state, notificationGranted] = await Promise.all([
         loadProfile(user.id),
         loadOnboardingState(user.id),

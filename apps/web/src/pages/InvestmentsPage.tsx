@@ -1,15 +1,18 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
 import { formatMinor, fromMinorUnits, toMinorUnits, type RiskTolerance } from "@capitalflow/core";
 
+import { InlineCategoryCreator } from "../components/InlineCategoryCreator";
 import { LoadingScreen } from "../components/LoadingScreen";
 import { Notice } from "../components/Notice";
 import {
   createInvestment,
+  deleteInvestment,
   listCategories,
   listInvestments,
   loadProfile,
   recordInvestmentActivity,
   recordInvestmentValuation,
+  updateInvestment,
 } from "../lib/data";
 import type { Category, Investment } from "../lib/types";
 
@@ -22,17 +25,29 @@ export function InvestmentsPage({ userId }: { userId: string }) {
   const [name, setName] = useState("");
   const [assetClass, setAssetClass] = useState("Fondo diversificado");
   const [categoryId, setCategoryId] = useState("");
+  const [showCategoryCreator, setShowCategoryCreator] = useState(false);
   const [currency, setCurrency] = useState("COP");
   const [currencies, setCurrencies] = useState<string[]>(["COP"]);
   const [contributions, setContributions] = useState("");
   const [currentValue, setCurrentValue] = useState("");
   const [risk, setRisk] = useState<RiskTolerance>("medium");
   const [notes, setNotes] = useState("");
-  const [editingInvestmentId, setEditingInvestmentId] = useState<string | null>(null);
+
+  const [activityInvestmentId, setActivityInvestmentId] = useState<string | null>(null);
   const [updateKind, setUpdateKind] = useState<InvestmentUpdateKind>("valuation");
   const [updateAmount, setUpdateAmount] = useState("");
   const [updateDate, setUpdateDate] = useState(todayInputValue());
   const [updateNote, setUpdateNote] = useState("");
+
+  const [detailsInvestmentId, setDetailsInvestmentId] = useState<string | null>(null);
+  const [editName, setEditName] = useState("");
+  const [editAssetClass, setEditAssetClass] = useState("");
+  const [editCategoryId, setEditCategoryId] = useState("");
+  const [editRisk, setEditRisk] = useState<RiskTolerance>("medium");
+  const [editNotes, setEditNotes] = useState("");
+  const [editContributions, setEditContributions] = useState("");
+  const [editCurrentValue, setEditCurrentValue] = useState("");
+
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -80,6 +95,7 @@ export function InvestmentsPage({ userId }: { userId: string }) {
       });
       setName("");
       setCategoryId("");
+      setShowCategoryCreator(false);
       setContributions("");
       setCurrentValue("");
       setNotes("");
@@ -98,6 +114,7 @@ export function InvestmentsPage({ userId }: { userId: string }) {
     setError(null);
     try {
       const amountMinor = toMinorUnits(updateAmount || "0", investment.currency);
+      if (updateKind !== "valuation" && amountMinor <= 0) throw new Error("El monto debe ser mayor que cero.");
       const occurredAt = localDateToIso(updateDate);
       if (updateKind === "valuation") {
         await recordInvestmentValuation({
@@ -115,7 +132,7 @@ export function InvestmentsPage({ userId }: { userId: string }) {
           note: updateNote.trim() || null,
         });
       }
-      closeUpdateForm();
+      closeActivityForm();
       await load();
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "No fue posible actualizar la inversión.");
@@ -124,20 +141,106 @@ export function InvestmentsPage({ userId }: { userId: string }) {
     }
   }
 
-  function openUpdateForm(investment: Investment): void {
-    setEditingInvestmentId((current) => current === investment.id ? null : investment.id);
+  function openActivityForm(investment: Investment): void {
+    if (activityInvestmentId === investment.id) {
+      closeActivityForm();
+      return;
+    }
+    setDetailsInvestmentId(null);
+    setActivityInvestmentId(investment.id);
     setUpdateKind("valuation");
     setUpdateAmount(String(fromMinorUnits(investment.current_value_minor, investment.currency)));
     setUpdateDate(todayInputValue());
     setUpdateNote("");
+    setError(null);
   }
 
-  function closeUpdateForm(): void {
-    setEditingInvestmentId(null);
+  function closeActivityForm(): void {
+    setActivityInvestmentId(null);
     setUpdateKind("valuation");
     setUpdateAmount("");
     setUpdateDate(todayInputValue());
     setUpdateNote("");
+  }
+
+  function openDetailsEditor(investment: Investment): void {
+    if (detailsInvestmentId === investment.id) {
+      setDetailsInvestmentId(null);
+      return;
+    }
+    closeActivityForm();
+    setDetailsInvestmentId(investment.id);
+    setEditName(investment.name);
+    setEditAssetClass(investment.asset_class);
+    setEditCategoryId(investment.category_id ?? "");
+    setEditRisk(investment.risk_level);
+    setEditNotes(investment.notes ?? "");
+    setEditContributions(String(fromMinorUnits(investment.net_contributions_minor, investment.currency)));
+    setEditCurrentValue(String(fromMinorUnits(investment.current_value_minor, investment.currency)));
+    setError(null);
+  }
+
+  async function submitDetails(event: FormEvent<HTMLFormElement>, investment: Investment): Promise<void> {
+    event.preventDefault();
+    setBusy(true);
+    setError(null);
+    try {
+      const desiredContributionsMinor = toMinorUnits(editContributions || "0", investment.currency);
+      const desiredCurrentValueMinor = toMinorUnits(editCurrentValue || "0", investment.currency);
+      const correctionAt = new Date().toISOString();
+
+      if (desiredContributionsMinor !== investment.net_contributions_minor) {
+        const delta = Math.abs(desiredContributionsMinor - investment.net_contributions_minor);
+        await recordInvestmentActivity({
+          investment_id: investment.id,
+          kind: desiredContributionsMinor > investment.net_contributions_minor ? "contribution" : "withdrawal",
+          amount_minor: delta,
+          occurred_at: correctionAt,
+          note: "Corrección manual de aportes netos",
+        });
+      }
+
+      // A final valuation makes the editor authoritative even when the capital
+      // correction above also generated its paired valuation.
+      if (desiredCurrentValueMinor !== investment.current_value_minor || desiredContributionsMinor !== investment.net_contributions_minor) {
+        await recordInvestmentValuation({
+          investment_id: investment.id,
+          value_minor: desiredCurrentValueMinor,
+          valued_at: new Date().toISOString(),
+          note: "Corrección manual del valor actual",
+        });
+      }
+
+      await updateInvestment(investment.id, {
+        name: editName.trim(),
+        asset_class: editAssetClass.trim(),
+        category_id: editCategoryId || null,
+        risk_level: editRisk,
+        notes: editNotes.trim() || null,
+      });
+      setDetailsInvestmentId(null);
+      await load();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "No fue posible editar la inversión.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function removeInvestment(investment: Investment): Promise<void> {
+    if (!window.confirm(`¿Eliminar la inversión “${investment.name}”? También se eliminarán sus movimientos y valoraciones.`)) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await deleteInvestment(investment.id);
+      if (activityInvestmentId === investment.id) closeActivityForm();
+      if (detailsInvestmentId === investment.id) setDetailsInvestmentId(null);
+      await load();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "No fue posible eliminar la inversión.");
+    } finally {
+      setBusy(false);
+    }
   }
 
   if (loading) return <LoadingScreen label="Cargando inversiones…" />;
@@ -166,7 +269,8 @@ export function InvestmentsPage({ userId }: { userId: string }) {
           <div className="form-grid">
             <label className="field"><span>Nombre</span><input value={name} onChange={(event) => setName(event.target.value)} required placeholder="Ej. Portafolio largo plazo" /></label>
             <label className="field"><span>Clase de activo</span><input value={assetClass} onChange={(event) => setAssetClass(event.target.value)} required /></label>
-            <label className="field"><span>Categoría</span><select value={categoryId} onChange={(event) => setCategoryId(event.target.value)}><option value="">Sin categoría</option>{eligibleCategories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select></label>
+            <label className="field"><span>Categoría</span><select value={categoryId} onChange={(event) => { if (event.target.value === "__create__") { setCategoryId(""); setShowCategoryCreator(true); return; } setShowCategoryCreator(false); setCategoryId(event.target.value); }}><option value="">Sin categoría</option>{eligibleCategories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}<option value="__create__">＋ Crear categoría</option></select></label>
+            {showCategoryCreator ? <div className="inline-category-slot span-2"><InlineCategoryCreator defaultKind="investment" options={[{ value: "investment", label: "Inversiones" }]} onCancel={() => setShowCategoryCreator(false)} onCreated={(category) => { setCategories((current) => [...current.filter((item) => item.id !== category.id), category].sort((a, b) => a.name.localeCompare(b.name, "es"))); setCategoryId(category.id); setShowCategoryCreator(false); }} /></div> : null}
             <label className="field"><span>Aportes netos</span><input type="number" min="0" step="any" value={contributions} onChange={(event) => setContributions(event.target.value)} required /></label>
             <label className="field"><span>Valor actual</span><input type="number" min="0" step="any" value={currentValue} onChange={(event) => setCurrentValue(event.target.value)} required /></label>
             <label className="field"><span>Moneda</span><select value={currency} onChange={(event) => setCurrency(event.target.value)}>{currencies.map((item) => <option key={item}>{item}</option>)}</select></label>
@@ -187,14 +291,34 @@ export function InvestmentsPage({ userId }: { userId: string }) {
               <dl><div><dt>Aportado</dt><dd>{formatMinor(investment.net_contributions_minor, investment.currency)}</dd></div><div><dt>Valor actual</dt><dd>{formatMinor(investment.current_value_minor, investment.currency)}</dd></div><div><dt>Resultado</dt><dd>{formatMinor(gain, investment.currency)}</dd></div></dl>
               {investment.notes ? <small>{investment.notes}</small> : null}
               <p className="legal-copy">Rentabilidad simple basada en valores ingresados; no representa TIR, rendimiento anualizado ni garantía.</p>
-              <button className="secondary-button" type="button" onClick={() => openUpdateForm(investment)}>{editingInvestmentId === investment.id ? "Cancelar" : "Registrar movimiento o valoración"}</button>
-              {editingInvestmentId === investment.id ? (
+              <div className="button-row">
+                <button className="secondary-button" type="button" onClick={() => openActivityForm(investment)}>{activityInvestmentId === investment.id ? "Cancelar movimiento" : "Registrar movimiento o valoración"}</button>
+                <button className="secondary-button" type="button" onClick={() => openDetailsEditor(investment)}>{detailsInvestmentId === investment.id ? "Cancelar edición" : "Editar inversión"}</button>
+                <button className="ghost-danger" type="button" disabled={busy} onClick={() => void removeInvestment(investment)}>Eliminar</button>
+              </div>
+
+              {activityInvestmentId === investment.id ? (
                 <form className="inline-form investment-update-form" onSubmit={(event) => void submitUpdate(event, investment)}>
-                  <label className="field"><span>Tipo</span><select value={updateKind} onChange={(event) => { setUpdateKind(event.target.value as InvestmentUpdateKind); setUpdateAmount(event.target.value === "valuation" ? String(fromMinorUnits(investment.current_value_minor, investment.currency)) : ""); }}><option value="valuation">Nueva valoración total</option><option value="contribution">Aporte</option><option value="withdrawal">Retiro</option></select></label>
+                  <label className="field"><span>Tipo</span><select value={updateKind} onChange={(event) => { const nextKind = event.target.value as InvestmentUpdateKind; setUpdateKind(nextKind); setUpdateAmount(nextKind === "valuation" ? String(fromMinorUnits(investment.current_value_minor, investment.currency)) : ""); }}><option value="valuation">Nueva valoración total</option><option value="contribution">Aporte</option><option value="withdrawal">Retiro</option></select></label>
                   <label className="field"><span>{updateKind === "valuation" ? "Nuevo valor total" : "Monto"} ({investment.currency})</span><input type="number" min="0" step="any" value={updateAmount} onChange={(event) => setUpdateAmount(event.target.value)} required /></label>
                   <label className="field"><span>Fecha</span><input type="date" value={updateDate} onChange={(event) => setUpdateDate(event.target.value)} required /></label>
                   <label className="field"><span>Nota</span><input value={updateNote} onChange={(event) => setUpdateNote(event.target.value)} maxLength={160} placeholder="Opcional" /></label>
+                  <p className="form-hint span-2">Un aporte aumenta aportes netos y valor actual por el mismo monto; un retiro reduce ambos. Una valoración solo cambia el valor actual y, por tanto, la ganancia/pérdida.</p>
                   <button className="primary-button" type="submit" disabled={busy}>{busy ? "Guardando…" : "Guardar actualización"}</button>
+                </form>
+              ) : null}
+
+              {detailsInvestmentId === investment.id ? (
+                <form className="inline-form investment-edit-form" onSubmit={(event) => void submitDetails(event, investment)}>
+                  <label className="field"><span>Nombre</span><input value={editName} onChange={(event) => setEditName(event.target.value)} required /></label>
+                  <label className="field"><span>Clase de activo</span><input value={editAssetClass} onChange={(event) => setEditAssetClass(event.target.value)} required /></label>
+                  <label className="field"><span>Categoría</span><select value={editCategoryId} onChange={(event) => setEditCategoryId(event.target.value)}><option value="">Sin categoría</option>{eligibleCategories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select></label>
+                  <label className="field"><span>Riesgo</span><select value={editRisk} onChange={(event) => setEditRisk(event.target.value as RiskTolerance)}><option value="low">Bajo</option><option value="medium">Medio</option><option value="high">Alto</option></select></label>
+                  <label className="field"><span>Aportes netos ({investment.currency})</span><input type="number" min="0" step="any" value={editContributions} onChange={(event) => setEditContributions(event.target.value)} required /></label>
+                  <label className="field"><span>Valor actual ({investment.currency})</span><input type="number" min="0" step="any" value={editCurrentValue} onChange={(event) => setEditCurrentValue(event.target.value)} required /></label>
+                  <label className="field span-2"><span>Notas</span><input value={editNotes} onChange={(event) => setEditNotes(event.target.value)} maxLength={280} /></label>
+                  <p className="form-hint span-2">Usa “Aportes netos” y “Valor actual” para corregir una captura equivocada. La moneda se mantiene fija para no mezclar historiales incompatibles.</p>
+                  <button className="primary-button" type="submit" disabled={busy}>{busy ? "Guardando…" : "Guardar cambios"}</button>
                 </form>
               ) : null}
             </article>
@@ -217,7 +341,8 @@ function todayInputValue(): string {
 }
 
 function localDateToIso(value: string): string {
-  const date = new Date(`${value}T12:00:00`);
+  if (value === todayInputValue()) return new Date().toISOString();
+  const date = new Date(`${value}T23:59:59.999`);
   if (Number.isNaN(date.getTime())) throw new Error("La fecha de la actualización no es válida.");
   return date.toISOString();
 }

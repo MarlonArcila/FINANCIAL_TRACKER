@@ -57,3 +57,29 @@ test("keeps a borderline candidate in review rather than auto-posting", () => {
   assert.equal(result.outcome, "needs_review");
   assert.equal(result.reason, "confidence_below_auto_post_threshold");
 });
+
+test("requires review when category resolution is mandatory but missing", () => {
+  const result = decideAutomationPolicy({
+    confidence: 0.99,
+    accountQuality: 0.99,
+    categoryQuality: null,
+    autoPostEnabled: true,
+    autoPostMinConfidence: 0.94,
+    autoReviewMinConfidence: 0.70,
+    categoryRequired: true,
+  });
+  assert.deepEqual(result, { outcome: "needs_review", reason: "category_unresolved", score: 0.99 });
+});
+
+test("requires review when the user disables automation", () => {
+  const result = decideAutomationPolicy({
+    confidence: 0.99,
+    accountQuality: 0.99,
+    categoryQuality: 0.99,
+    autoPostEnabled: false,
+    autoPostMinConfidence: 0.94,
+    autoReviewMinConfidence: 0.70,
+    categoryRequired: false,
+  });
+  assert.deepEqual(result, { outcome: "needs_review", reason: "automation_disabled", score: 0.99 });
+});

@@ -47,7 +47,7 @@ Ayudar al usuario a consolidar, clasificar y administrar su flujo de dinero con 
 |---|---:|
 | Usuarios que completan registro y checkout | >= 35% de los registros iniciados |
 | Usuarios que crean al menos una cuenta/categoría/transacción | >= 70% de suscriptores activos |
-| Candidatos detectados aceptados o corregidos | >= 70% |
+| Excepciones detectadas aceptadas, corregidas o descartadas | >= 70% |
 | Precisión de importe y moneda en candidatos confirmados | >= 95% |
 | Precisión de tipo ingreso/gasto después de corrección | >= 85% |
 | Usuarios que crean al menos una meta | >= 40% |
@@ -225,10 +225,10 @@ Ayudar al usuario a consolidar, clasificar y administrar su flujo de dinero con 
 4. Selecciona las aplicaciones cuyos avisos desea procesar.
 5. `NotificationListenerService` recibe un aviso.
 6. El parser local extrae datos mínimos y elimina fragmentos sensibles.
-7. Guarda una candidata local privada.
+7. Guarda una señal financiera sanitizada en la cola local privada.
 8. Al abrir o sincronizar la app, el plugin entrega la cola al frontend.
-9. Backend deduplica y crea `transaction_candidates`.
-10. Usuario acepta, corrige o rechaza.
+9. El backend deduplica, resuelve cuenta/categoría y aplica la política determinista: contabiliza una señal inequívoca o crea una `transaction_candidate` solo si es una excepción.
+10. El usuario acepta, corrige o rechaza únicamente las excepciones; una corrección puede enseñar reglas y re-evaluar pendientes recientes.
 
 ### 8.4 Detección desde Gmail/Outlook
 
@@ -238,8 +238,8 @@ Ayudar al usuario a consolidar, clasificar y administrar su flujo de dinero con 
 4. Callback valida estado, intercambia código y cifra tokens.
 5. Se realiza sincronización inicial limitada.
 6. Se registra mecanismo incremental: Gmail watch/Pub/Sub o Microsoft Graph subscription/delta.
-7. Nuevos mensajes relevantes generan candidatos.
-8. El usuario revisa y confirma.
+7. Los mensajes relevantes se deduplican y pasan por la política determinista de automatización.
+8. Las señales inequívocas se contabilizan; solo las ambiguas o inseguras llegan a revisión para confirmar, corregir o rechazar.
 
 ### 8.5 Meta de ahorro
 
@@ -347,7 +347,7 @@ Ayudar al usuario a consolidar, clasificar y administrar su flujo de dinero con 
 | FR-MAIL-004 | Realizar sincronización inicial con límite temporal y paginación. | P0 |
 | FR-MAIL-005 | Procesar cambios incrementales sin releer todo el buzón. | P0 |
 | FR-MAIL-006 | Renovar watches/subscriptions antes de expirar. | P0 |
-| FR-MAIL-007 | Crear candidatos solo para mensajes con evidencia financiera suficiente. | P0 |
+| FR-MAIL-007 | Generar señales solo para mensajes con evidencia financiera suficiente y aplicar la política de automatización por excepción. | P0 |
 | FR-MAIL-008 | No conservar cuerpos completos por defecto. | P0 |
 | FR-MAIL-009 | Permitir sincronización manual y mostrar último estado/error. | P0 |
 
@@ -458,7 +458,7 @@ Ayudar al usuario a consolidar, clasificar y administrar su flujo de dinero con 
 - La app puede indicar si el permiso está concedido.
 - Sin permiso, no intenta capturar.
 - Solo procesa paquetes seleccionados.
-- Una notificación con evidencia financiera genera una candidata local.
+- Una notificación con evidencia financiera genera una señal local sanitizada; si el backend la resuelve con seguridad se contabiliza y, si no, queda como excepción revisable.
 - Una notificación OTP, promocional o sin importe no genera candidata.
 - La candidata se elimina de la cola local solo después de una respuesta exitosa del backend.
 

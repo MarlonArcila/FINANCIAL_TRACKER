@@ -17,7 +17,7 @@ export async function downloadBackupFile(provider: StorageProvider, accessToken:
     ? `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(remoteFileId)}?alt=media`
     : `https://graph.microsoft.com/v1.0/me/drive/items/${encodeURIComponent(remoteFileId)}/content`;
   const response = await fetch(url, { headers: { authorization: `Bearer ${accessToken}` }, redirect: "follow" });
-  if (!response.ok) throw new Error(`Cloud download failed (${provider}) ${response.status}: ${await response.text()}`);
+  if (!response.ok) throw new Error(`Cloud download failed () `);
   const text = await response.text();
   if (new TextEncoder().encode(text).length > 50 * 1024 * 1024) throw new Error("Backup exceeds the 50 MB restore limit");
   return text;
@@ -38,7 +38,7 @@ async function uploadGoogleDrive(accessToken: string, filename: string, content:
     body,
   });
   const payload = await response.json() as { id?: string; name?: string; size?: string; createdTime?: string; error?: unknown };
-  if (!response.ok || !payload.id) throw new Error(`Google Drive upload failed ${response.status}: ${JSON.stringify(payload)}`);
+  if (!response.ok || !payload.id) throw new Error(`Google Drive upload failed `);
   return { id: payload.id, name: payload.name ?? filename, size: Number(payload.size ?? new TextEncoder().encode(content).length), createdAt: payload.createdTime ?? new Date().toISOString() };
 }
 
@@ -49,6 +49,6 @@ async function uploadOneDrive(accessToken: string, filename: string, content: st
   const url = `https://graph.microsoft.com/v1.0/me/drive/items/${encodeURIComponent(root.id)}:/${encodeURIComponent(filename)}:/content`;
   const response = await fetch(url, { method: "PUT", headers: { authorization: `Bearer ${accessToken}`, "content-type": "application/json" }, body: content });
   const payload = await response.json() as { id?: string; name?: string; size?: number; createdDateTime?: string };
-  if (!response.ok || !payload.id) throw new Error(`OneDrive upload failed ${response.status}: ${JSON.stringify(payload)}`);
+  if (!response.ok || !payload.id) throw new Error(`OneDrive upload failed `);
   return { id: payload.id, name: payload.name ?? filename, size: Number(payload.size ?? new TextEncoder().encode(content).length), createdAt: payload.createdDateTime ?? new Date().toISOString() };
 }

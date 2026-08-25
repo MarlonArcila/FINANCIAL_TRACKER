@@ -1,5 +1,5 @@
 import { errorResponse, HttpError } from "../_shared/http.ts";
-import { consumeOAuthState } from "../_shared/oauth-state.ts";
+import { consumeOAuthState, requireOAuthCallbackState } from "../_shared/oauth-state.ts";
 import { enqueueMailSync } from "../_shared/mail-jobs.ts";
 import { configureOutlookSubscription, exchangeMicrosoftCode, microsoftProfile } from "../_shared/outlook.ts";
 import { assertEntitled, createServiceClient } from "../_shared/supabase.ts";
@@ -10,7 +10,8 @@ Deno.serve(async (request) => {
     const url = new URL(request.url);
     if (url.searchParams.get("error")) throw new HttpError(400, `microsoft_oauth_${url.searchParams.get("error")}`);
     const code = url.searchParams.get("code"); const state = url.searchParams.get("state");
-    if (!code || !state) throw new HttpError(400, "missing_oauth_code_or_state");
+    if (!code) throw new HttpError(400, "missing_oauth_code_or_state");
+    requireOAuthCallbackState(state);
     const service = createServiceClient();
     const oauth = await consumeOAuthState(service, state, "outlook");
     await assertEntitled(service, oauth.userId);
@@ -28,5 +29,5 @@ Deno.serve(async (request) => {
     await service.schema("private").from("audit_events").insert({ user_id: oauth.userId, actor: "microsoft", action: "outlook.connected", entity_type: "source_connection", entity_id: connection.id });
     const redirect = new URL(oauth.returnUrl); redirect.searchParams.set("provider", "outlook"); redirect.searchParams.set("status", "connected");
     return Response.redirect(redirect.toString(), 302);
-  } catch (error) { console.error(error); return errorResponse(error); }
+  } catch (error) { return errorResponse(error); }
 });

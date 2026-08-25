@@ -1,6 +1,6 @@
 import { configureGmailWatch, exchangeGoogleCode, googleProfile } from "../_shared/gmail.ts";
 import { errorResponse, HttpError } from "../_shared/http.ts";
-import { consumeOAuthState } from "../_shared/oauth-state.ts";
+import { consumeOAuthState, requireOAuthCallbackState } from "../_shared/oauth-state.ts";
 import { enqueueMailSync } from "../_shared/mail-jobs.ts";
 import { assertEntitled, createServiceClient } from "../_shared/supabase.ts";
 import { saveTokens } from "../_shared/tokens.ts";
@@ -11,7 +11,8 @@ Deno.serve(async (request) => {
     if (url.searchParams.get("error")) throw new HttpError(400, `google_oauth_${url.searchParams.get("error")}`);
     const code = url.searchParams.get("code");
     const state = url.searchParams.get("state");
-    if (!code || !state) throw new HttpError(400, "missing_oauth_code_or_state");
+    if (!code) throw new HttpError(400, "missing_oauth_code_or_state");
+    requireOAuthCallbackState(state);
     const service = createServiceClient();
     const oauth = await consumeOAuthState(service, state, "gmail");
     await assertEntitled(service, oauth.userId);
@@ -36,7 +37,6 @@ Deno.serve(async (request) => {
     });
     return Response.redirect(withResult(oauth.returnUrl, "gmail", "connected"), 302);
   } catch (error) {
-    console.error(error);
     return errorResponse(error);
   }
 });

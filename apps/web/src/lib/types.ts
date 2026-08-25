@@ -37,6 +37,10 @@ export interface Account {
   archived_at: string | null;
 }
 
+export interface AccountBalance extends Account {
+  balance_minor: number;
+}
+
 export interface Category {
   id: string;
   name: string;
@@ -57,6 +61,7 @@ export interface Transaction {
   description: string | null;
   occurred_at: string;
   source: "manual" | "android_notification" | "gmail" | "outlook" | "system" | "import_file";
+  auto_posted?: boolean;
   created_at: string;
 }
 
@@ -119,6 +124,7 @@ export interface DashboardSummary {
   incomeMinor: number;
   expenseMinor: number;
   balanceMinor: number;
+  currentBalanceMinor: number;
   pendingCandidates: number;
   baseCurrency: string;
   convertedCurrencies: string[];

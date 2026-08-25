@@ -1,13 +1,15 @@
 import { errorResponse, HttpError } from "../_shared/http.ts";
 import { assertAnnualEntitled, createServiceClient } from "../_shared/supabase.ts";
 import { consumeStorageOAuthState, exchangeStorageCode, saveStorageTokens, storageProfile, storageScopes } from "../_shared/storage-oauth.ts";
+import { requireOAuthCallbackState } from "../_shared/oauth-state.ts";
 
 Deno.serve(async (request) => {
   try {
     const url = new URL(request.url);
     if (url.searchParams.get("error")) throw new HttpError(400, `storage_oauth_${url.searchParams.get("error")}`);
     const code = url.searchParams.get("code"); const state = url.searchParams.get("state");
-    if (!code || !state) throw new HttpError(400, "missing_oauth_code_or_state");
+    if (!code) throw new HttpError(400, "missing_oauth_code_or_state");
+    requireOAuthCallbackState(state);
     const service = createServiceClient();
     const oauth = await consumeStorageOAuthState(service, state);
     await assertAnnualEntitled(service, oauth.userId);

@@ -12,3 +12,4 @@ apps/web/android/build/
 apps/web/.vite/
 supabase/.branches/
 supabase/.temp/
+.secrets.*.env

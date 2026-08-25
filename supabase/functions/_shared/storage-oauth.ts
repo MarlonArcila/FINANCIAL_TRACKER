@@ -3,6 +3,7 @@ import type { SupabaseClient } from "npm:@supabase/supabase-js@2";
 import { decryptSecret, encryptSecret, pkceChallenge, randomBase64Url, sha256Base64Url } from "./crypto.ts";
 import { optionalEnv, requiredEnv } from "./env.ts";
 import { HttpError } from "./http.ts";
+import { requireOAuthCallbackState } from "./oauth-state.ts";
 
 export type StorageProvider = "google_drive" | "onedrive";
 
@@ -37,16 +38,11 @@ export async function consumeStorageOAuthState(service: SupabaseClient, state: s
   codeVerifier: string;
   returnUrl: string;
 }> {
+  state = requireOAuthCallbackState(state);
   const hash = await sha256Base64Url(state);
-  const { data, error } = await service.schema("private").from("storage_oauth_states")
-    .select("id,user_id,provider,code_verifier,return_url,expires_at,used_at")
-    .eq("state_hash", hash).maybeSingle();
-  if (error) throw error;
-  if (!data || data.used_at || Date.parse(data.expires_at) <= Date.now()) throw new HttpError(400, "invalid_or_expired_storage_oauth_state");
-  const { data: consumed, error: consumeError } = await service.schema("private").from("storage_oauth_states")
-    .update({ used_at: new Date().toISOString() }).eq("id", data.id).is("used_at", null).select("id").maybeSingle();
-  if (consumeError) throw consumeError;
-  if (!consumed) throw new HttpError(400, "storage_oauth_state_already_consumed");
+  const { data, error } = await service.rpc("consume_storage_oauth_state", { p_state_hash: hash }).maybeSingle();
+  if (error) throw new HttpError(503, "oauth_state_service_unavailable");
+  if (!data) throw new HttpError(400, "invalid_or_expired_oauth_state");
   return { userId: data.user_id, provider: data.provider as StorageProvider, codeVerifier: data.code_verifier, returnUrl: data.return_url };
 }
 
@@ -174,7 +170,7 @@ async function refreshMicrosoftStorageToken(refreshToken: string): Promise<Stora
 
 async function parseTokenResponse(response: Response, label: string): Promise<StorageTokenSet> {
   const payload = await response.json() as Record<string, unknown>;
-  if (!response.ok || typeof payload.access_token !== "string") throw new Error(`${label} storage token exchange failed: ${JSON.stringify(payload)}`);
+  if (!response.ok || typeof payload.access_token !== "string") throw new Error(` storage token exchange failed`);
   return {
     accessToken: payload.access_token,
     refreshToken: typeof payload.refresh_token === "string" ? payload.refresh_token : null,
@@ -184,6 +180,6 @@ async function parseTokenResponse(response: Response, label: string): Promise<St
 
 async function authorizedFetch(accessToken: string, url: string): Promise<Response> {
   const response = await fetch(url, { headers: { authorization: `Bearer ${accessToken}` } });
-  if (!response.ok) throw new Error(`Storage profile request ${response.status}: ${await response.text()}`);
+  if (!response.ok) throw new Error(`Storage profile request  failed`);
   return response;
 }

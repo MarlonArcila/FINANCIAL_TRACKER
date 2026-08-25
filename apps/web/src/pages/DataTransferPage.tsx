@@ -29,6 +29,7 @@ export function DataTransferPage({ user }: { user: AppUser }) {
   const [storage, setStorage] = useState<StorageConnection[]>([]);
   const [backups, setBackups] = useState<CloudBackup[]>([]);
   const [parsed, setParsed] = useState<ParsedImportFile | null>(null);
+  const [selectedFileName, setSelectedFileName] = useState("");
   const [mapping, setMapping] = useState<ImportMapping>({});
   const [defaultAccountId, setDefaultAccountId] = useState("");
   const [defaultKind, setDefaultKind] = useState<"income" | "expense">("expense");
@@ -71,6 +72,7 @@ export function DataTransferPage({ user }: { user: AppUser }) {
 
   async function selectFile(file: File | null): Promise<void> {
     if (!file) return;
+    setSelectedFileName(file.name);
     setBusy("file"); setError(null); setMessage(null);
     try {
       const next = await readImportFile(file);
@@ -193,7 +195,15 @@ export function DataTransferPage({ user }: { user: AppUser }) {
 
       <article className="panel stack">
         <div><span className="eyebrow">SEMANAL + ANUAL</span><h2>Importar desde otra plataforma</h2><p>Admite CSV, TSV, TXT, Excel XLSX/XLS y JSON. CapitalFlow intenta reconocer las columnas automáticamente y omite duplicados exactos.</p></div>
-        <label className="field"><span>Archivo</span><input type="file" accept=".csv,.tsv,.txt,.xlsx,.xls,.json" disabled={busy !== null} onChange={(event) => void selectFile(event.target.files?.[0] ?? null)} /></label>
+        <div className="field">
+          <span>Archivo</span>
+          <div className="file-picker">
+            <input id="capitalflow-import-file" className="file-picker-input" type="file" accept=".csv,.tsv,.txt,.xlsx,.xls,.json" disabled={busy !== null} onChange={(event) => void selectFile(event.target.files?.[0] ?? null)} />
+            <label className="file-picker-button" htmlFor="capitalflow-import-file"><span aria-hidden="true">↥</span>{busy === "file" ? "Leyendo…" : "Seleccionar archivo"}</label>
+            <span className={selectedFileName ? "file-picker-name selected" : "file-picker-name"}>{selectedFileName || "Ningún archivo seleccionado"}</span>
+          </div>
+          <small>CSV, TSV, TXT, XLSX, XLS o JSON.</small>
+        </div>
         {accounts.length === 0 ? <Notice tone="warning">Crea al menos una cuenta antes de importar movimientos.</Notice> : null}
         {parsed && defaultAccount ? <>
           <div className="form-grid">

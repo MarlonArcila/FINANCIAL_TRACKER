@@ -3,6 +3,17 @@ import type { SupabaseClient } from "npm:@supabase/supabase-js@2";
 import { pkceChallenge, randomBase64Url, sha256Base64Url } from "./crypto.ts";
 import { HttpError } from "./http.ts";
 
+type StoredOAuthState = { provider: "gmail" | "outlook"; expires_at: string; used_at: string | null };
+
+export function requireOAuthCallbackState(state: string | null): string {
+  if (!state || !/^[A-Za-z0-9_-]{43}$/u.test(state)) throw new HttpError(400, "invalid_or_expired_oauth_state");
+  return state;
+}
+
+export function canConsumeOAuthState(state: StoredOAuthState | null, provider: "gmail" | "outlook", now = Date.now()): boolean {
+  return Boolean(state && state.provider === provider && !state.used_at && Number.isFinite(Date.parse(state.expires_at)) && Date.parse(state.expires_at) > now);
+}
+
 export async function createOAuthState(
   service: SupabaseClient,
   input: { userId: string; provider: "gmail" | "outlook"; returnUrl: string },
@@ -27,27 +38,10 @@ export async function consumeOAuthState(
   state: string,
   provider: "gmail" | "outlook",
 ): Promise<{ userId: string; codeVerifier: string; returnUrl: string }> {
+  state = requireOAuthCallbackState(state);
   const stateHash = await sha256Base64Url(state);
-  const { data, error } = await service
-    .schema("private")
-    .from("oauth_states")
-    .select("id,user_id,provider,code_verifier,return_url,expires_at,used_at")
-    .eq("state_hash", stateHash)
-    .maybeSingle();
-  if (error) throw error;
-  if (!data || data.provider !== provider || data.used_at || Date.parse(data.expires_at) <= Date.now()) {
-    throw new HttpError(400, "invalid_or_expired_oauth_state");
-  }
-  const { data: consumed, error: updateError } = await service
-    .schema("private")
-    .from("oauth_states")
-    .update({ used_at: new Date().toISOString() })
-    .eq("id", data.id)
-    .is("used_at", null)
-    .gt("expires_at", new Date().toISOString())
-    .select("id")
-    .maybeSingle();
-  if (updateError) throw updateError;
-  if (!consumed) throw new HttpError(400, "oauth_state_already_consumed");
+  const { data, error } = await service.rpc("consume_oauth_state", { p_state_hash: stateHash, p_provider: provider }).maybeSingle();
+  if (error) throw new HttpError(503, "oauth_state_service_unavailable");
+  if (!data) throw new HttpError(400, "invalid_or_expired_oauth_state");
   return { userId: data.user_id, codeVerifier: data.code_verifier, returnUrl: data.return_url };
 }
