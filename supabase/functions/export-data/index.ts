@@ -28,14 +28,17 @@ Deno.serve(async (request) => {
       excludedSecrets: ["oauth access tokens", "oauth refresh tokens", "webhook secrets", "service credentials"],
     };
     const content = JSON.stringify(document, null, 2);
-    await service.schema("private").from("audit_events").insert({
-      user_id: user.id,
-      actor: "user",
-      action: "data.exported",
-      entity_type: "account",
-      entity_id: user.id,
-      metadata: { bytes: new TextEncoder().encode(content).length },
-    });
+    const { error: auditError } = await service.rpc(
+      "service_record_export_audit_event",
+      {
+        p_user_id: user.id,
+        p_entity_id: user.id,
+        p_metadata: {
+          bytes: new TextEncoder().encode(content).length,
+        },
+      },
+    );
+    if (auditError) throw auditError;
     return json({
       filename: `capitalflow-export-${new Date().toISOString().slice(0, 10)}.json`,
       mimeType: "application/json",
