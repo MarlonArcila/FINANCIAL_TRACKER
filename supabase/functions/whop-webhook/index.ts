@@ -1,8 +1,7 @@
-import Whop from "npm:@whop/sdk";
-
 import { recordAuditEvent } from "../_shared/audit.ts";
 import { optionalEnv } from "../_shared/env.ts";
-import { requireWhopWebhookSecret, verifyConfiguredWhopSignature } from "../_shared/external-auth.ts";
+import { requireWhopWebhookSecret } from "../_shared/external-auth.ts";
+import { verifyWhopStandardWebhookJson } from "../_shared/standard-webhook.ts";
 import { errorResponse, handleOptions, HttpError, json } from "../_shared/http.ts";
 import { createServiceClient } from "../_shared/supabase.ts";
 
@@ -20,15 +19,12 @@ Deno.serve(async (request) => {
     if (request.method !== "POST") throw new HttpError(405, "method_not_allowed");
     const raw = await request.text();
     const webhookSecret = requireWhopWebhookSecret(optionalEnv("WHOP_WEBHOOK_SECRET"));
-    const apiKey = optionalEnv("WHOP_API_KEY");
-    const whop = new Whop({
-      ...(apiKey ? { apiKey } : {}),
-      webhookKey: btoa(webhookSecret),
-    });
-    const event = verifyConfiguredWhopSignature(
-      Boolean(webhookSecret),
-      () => whop.webhooks.unwrap(raw, { headers: Object.fromEntries(request.headers.entries()) }) as WhopEvent,
-    );
+    let event: WhopEvent;
+    try {
+      event = await verifyWhopStandardWebhookJson<WhopEvent>(raw, request.headers, webhookSecret);
+    } catch {
+      throw new HttpError(401, "invalid_webhook_signature");
+    }
     if (!event.type || !event.data) throw new HttpError(400, "invalid_webhook_payload");
     const eventId = event.id ?? request.headers.get("webhook-id");
     if (!eventId) throw new HttpError(400, "missing_webhook_id");
