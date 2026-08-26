@@ -40,16 +40,21 @@ export async function createPilotUser(ctx, tag, { interval = null } = {}) {
   if (error || !data.user) throw error ?? new Error("AUTH_ADMIN_CREATE_USER_FAILED");
   const user = data.user;
   if (interval) {
-    const { error: subError } = await ctx.service.from("subscriptions").insert({
-      user_id: user.id,
-      provider: "whop",
-      provider_membership_id: `pilot-${tag}-${token}`,
-      provider_plan_id: `pilot-${interval}`,
-      interval,
-      status: "active",
-      current_period_start: new Date().toISOString(),
-      current_period_end: new Date(Date.now() + 86_400_000).toISOString(),
-      raw_status: "pilot_external_gate",
+    if (!new Set(["weekly", "annual"]).has(interval)) {
+      await ctx.service.auth.admin.deleteUser(user.id).catch(() => {});
+      throw new Error("PILOT_SUBSCRIPTION_INTERVAL_INVALID");
+    }
+    const { error: subError } = await ctx.service.rpc("service_apply_whop_membership", {
+      p_user_id: user.id,
+      p_provider_customer_id: null,
+      p_provider_membership_id: `pilot-${tag}-${token}`,
+      p_provider_plan_id: `pilot-${interval}`,
+      p_interval: interval,
+      p_status: "active",
+      p_current_period_start: new Date().toISOString(),
+      p_current_period_end: new Date(Date.now() + 86_400_000).toISOString(),
+      p_cancel_at_period_end: false,
+      p_raw_status: "pilot_external_gate",
     });
     if (subError) {
       await ctx.service.auth.admin.deleteUser(user.id).catch(() => {});

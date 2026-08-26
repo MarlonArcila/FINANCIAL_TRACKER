@@ -19,7 +19,7 @@ try {
   openBrowser(purchaseUrl);
 
   const subscription = await waitFor("WHOP_MEMBERSHIP_ACTIVATION", async () => {
-    const { data, error } = await ctx.service.from("subscriptions")
+    const { data, error } = await pilot.client.from("subscriptions")
       .select("provider_membership_id,provider_plan_id,interval,status,current_period_end")
       .eq("user_id", pilot.user.id).eq("provider", "whop")
       .in("status", ["active", "trialing"]).order("updated_at", { ascending: false }).limit(1).maybeSingle();
@@ -42,7 +42,7 @@ try {
   if (!cancel.ok) throw new Error(`WHOP_CANCEL_HTTP_${cancel.status}:${cancelRaw.slice(0, 500)}`);
 
   await waitFor("WHOP_DEACTIVATION_WEBHOOK", async () => {
-    const { data, error } = await ctx.service.from("subscriptions")
+    const { data, error } = await pilot.client.from("subscriptions")
       .select("status").eq("user_id", pilot.user.id).eq("provider_membership_id", membershipId).maybeSingle();
     if (error) throw error;
     return data && new Set(["canceled", "expired"]).has(data.status) ? data : null;

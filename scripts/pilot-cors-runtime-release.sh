@@ -22,7 +22,7 @@ ENDPOINT="https://${PROJECT_REF}.supabase.co/functions/v1/whop-webhook"
 TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
 ALLOW_CODE="$(curl -sS -D "$TMP/allow.h" -o "$TMP/allow.b" -w '%{http_code}' -X OPTIONS -H "Origin: $ORIGIN" -H 'Access-Control-Request-Method: POST' "$ENDPOINT")"
 [[ "$ALLOW_CODE" == "204" ]] || { cat "$TMP/allow.h" >&2; cat "$TMP/allow.b" >&2; echo "STOP: CORS_ALLOWED_PREFLIGHT_HTTP_$ALLOW_CODE" >&2; exit 1; }
-ALLOW_ORIGIN="$(awk -F':' 'tolower($1)=="access-control-allow-origin" {sub(/^[[:space:]]+/,"",$2); sub(/\r$/,"",$2); print $2}' "$TMP/allow.h" | tail -1)"
+ALLOW_ORIGIN="$(awk '{ p=index($0, ":"); if (!p) next; name=tolower(substr($0,1,p-1)); if (name != "access-control-allow-origin") next; value=substr($0,p+1); sub(/\r$/, "", value); gsub(/^[[:space:]]+|[[:space:]]+$/, "", value); print value }' "$TMP/allow.h" | tail -1)"
 [[ "$ALLOW_ORIGIN" == "$ORIGIN" ]] || { cat "$TMP/allow.h" >&2; echo "STOP: CORS_ALLOWED_ORIGIN_HEADER_MISMATCH" >&2; exit 1; }
 EVIL="https://evil.invalid"
 DENY_CODE="$(curl -sS -D "$TMP/deny.h" -o "$TMP/deny.b" -w '%{http_code}' -X OPTIONS -H "Origin: $EVIL" -H 'Access-Control-Request-Method: POST' "$ENDPOINT")"

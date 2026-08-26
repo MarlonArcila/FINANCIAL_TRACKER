@@ -97,22 +97,32 @@ async function processMembershipEvent(service: ReturnType<typeof createServiceCl
   const periodEnd = asIso(data.current_period_end ?? data.renewal_period_end);
   const cancelAtPeriodEnd = Boolean(data.cancel_at_period_end);
 
-  const { error } = await service.from("subscriptions").upsert({
-    user_id: userId,
-    provider: "whop",
-    provider_customer_id: firstString(data.user_id, isRecord(data.user) ? data.user.id : null),
-    provider_membership_id: membershipId,
-    provider_plan_id: planId,
-    interval,
-    status,
-    current_period_start: periodStart,
-    current_period_end: periodEnd,
-    cancel_at_period_end: cancelAtPeriodEnd,
-    raw_status: firstString(data.status, event.type),
-  }, { onConflict: "provider,provider_membership_id" });
+  const { data: archivedAccountIds, error } = await service.rpc("service_apply_whop_membership", {
+    p_user_id: userId,
+    p_provider_customer_id: firstString(data.user_id, isRecord(data.user) ? data.user.id : null),
+    p_provider_membership_id: membershipId,
+    p_provider_plan_id: planId,
+    p_interval: interval,
+    p_status: status,
+    p_current_period_start: periodStart,
+    p_current_period_end: periodEnd,
+    p_cancel_at_period_end: cancelAtPeriodEnd,
+    p_raw_status: firstString(data.status, event.type),
+  });
   if (error) throw error;
-
-  await enforceAccountPlanAfterMembershipChange(service, userId);
+  const archived = Array.isArray(archivedAccountIds)
+    ? archivedAccountIds.filter((id): id is string => typeof id === "string")
+    : [];
+  if (archived.length) {
+    await recordAuditEvent(service, {
+      userId,
+      actor: "system",
+      action: "accounts.archived_on_weekly_plan",
+      entityType: "account",
+      entityId: null,
+      metadata: { account_ids: archived },
+    });
+  }
 
   await recordAuditEvent(service, {
     userId,
@@ -122,35 +132,6 @@ async function processMembershipEvent(service: ReturnType<typeof createServiceCl
     entityId: membershipId,
     metadata: { status, interval, event_id: eventId },
   });
-}
-
-async function enforceAccountPlanAfterMembershipChange(service: ReturnType<typeof createServiceClient>, userId: string): Promise<void> {
-  const { data, error } = await service.from("subscriptions")
-    .select("interval,current_period_end")
-    .eq("user_id", userId)
-    .in("status", ["active", "trialing"]);
-  if (error) throw error;
-  const active = (data ?? []).filter((item) => !item.current_period_end || Date.parse(item.current_period_end) > Date.now());
-  if (active.some((item) => item.interval === "annual")) return;
-  if (!active.some((item) => item.interval === "weekly")) return;
-
-  const { data: archived, error: archiveError } = await service.from("accounts")
-    .update({ is_archived: true, archived_at: new Date().toISOString() })
-    .eq("user_id", userId)
-    .eq("is_primary", false)
-    .eq("is_archived", false)
-    .select("id");
-  if (archiveError) throw archiveError;
-  if ((archived ?? []).length) {
-    await recordAuditEvent(service, {
-      userId,
-      actor: "system",
-      action: "accounts.archived_on_weekly_plan",
-      entityType: "account",
-      entityId: null,
-      metadata: { account_ids: (archived ?? []).map((item) => item.id) },
-    });
-  }
 }
 
 function mapStatus(raw: string | null, eventType: string): string {

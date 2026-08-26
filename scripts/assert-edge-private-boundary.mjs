@@ -29,6 +29,21 @@ if (/(["'])private\1/u.test(schemasLine)) {
   violations.push("supabase/config.toml exposes private schema");
 }
 
+const whopWebhook = readFileSync(join(root, "supabase", "functions", "whop-webhook", "index.ts"), "utf8");
+if (!whopWebhook.includes('service.rpc("service_apply_whop_membership"')) violations.push("whop-webhook service membership RPC missing");
+if (whopWebhook.includes('.from("subscriptions").upsert') || whopWebhook.includes('.from("accounts").update')) violations.push("whop-webhook direct membership/account DML");
+const backupSource = readFileSync(join(root, "supabase", "functions", "_shared", "backup.ts"), "utf8");
+if (!backupSource.includes('service.rpc("service_build_user_backup"')) violations.push("backup service RPC missing");
+if (/service\.from\(/u.test(backupSource)) violations.push("backup direct service-role financial reads");
+const gatewayMigrations = readdirSync(join(root, "supabase", "migrations")).filter((name) => name.endsWith("_whop_storage_service_gateway.sql"));
+if (gatewayMigrations.length !== 1) violations.push(`whop/storage gateway migration count=${gatewayMigrations.length}`);
+else {
+  const gateway = readFileSync(join(root, "supabase", "migrations", gatewayMigrations[0]), "utf8").toLowerCase();
+  for (const required of ["public.service_apply_whop_membership(", "public.service_build_user_backup(", "security definer", "set search_path = ''", "grant execute on function public.service_apply_whop_membership", "grant execute on function public.service_build_user_backup", "grant select, insert, update on table public.storage_connections", "grant select, insert, update on table public.cloud_backups"]) {
+    if (!gateway.includes(required)) violations.push(`whop/storage gateway missing: ${required}`);
+  }
+}
+
 if (violations.length) {
   console.error("PRIVATE_DATA_API_BOUNDARY=FAIL");
   for (const violation of violations) console.error(` - ${violation}`);

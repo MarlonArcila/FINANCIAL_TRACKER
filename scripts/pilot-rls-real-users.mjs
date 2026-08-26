@@ -4,8 +4,8 @@ const ctx = supabaseContext();
 let a = null;
 let b = null;
 try {
-  a = await createPilotUser(ctx, "rls-a", { interval: "annual" });
-  b = await createPilotUser(ctx, "rls-b", { interval: "annual" });
+  a = await createPilotUser(ctx, "rls-a", { interval: "weekly" });
+  b = await createPilotUser(ctx, "rls-b", { interval: "weekly" });
 
   const { data: aAccount, error: aInsertError } = await a.client.from("accounts").insert({
     user_id: a.user.id, name: "RLS tenant A", type: "checking", currency: "COP",
