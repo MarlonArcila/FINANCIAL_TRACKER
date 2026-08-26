@@ -1,3 +1,4 @@
+import { recordAuditEvent } from "../_shared/audit.ts";
 import { disconnectMailConnection, type DisconnectableConnection } from "../_shared/disconnect.ts";
 import { errorResponse, handleOptions, HttpError, json, readJson } from "../_shared/http.ts";
 import { createServiceClient, requireUser } from "../_shared/supabase.ts";
@@ -22,12 +23,12 @@ Deno.serve(async (request) => {
       const result = await disconnectMailConnection(service, connection, "system");
       if (result.warning) cleanupWarnings.push(`${connection.provider}: ${result.warning}`);
     }
-    await service.schema("private").from("audit_events").insert({
-      user_id: user.id,
+    await recordAuditEvent(service, {
+      userId: user.id,
       actor: "user",
       action: "account.deleted",
-      entity_type: "auth_user",
-      entity_id: user.id,
+      entityType: "auth_user",
+      entityId: user.id,
       metadata: { cleanup_warnings: cleanupWarnings },
     });
     const { error: deleteError } = await service.auth.admin.deleteUser(user.id);

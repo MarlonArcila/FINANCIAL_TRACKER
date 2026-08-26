@@ -1,5 +1,6 @@
 import Whop from "npm:@whop/sdk";
 
+import { recordAuditEvent } from "../_shared/audit.ts";
 import { optionalEnv } from "../_shared/env.ts";
 import { requireWhopWebhookSecret, verifyConfiguredWhopSignature } from "../_shared/external-auth.ts";
 import { errorResponse, handleOptions, HttpError, json } from "../_shared/http.ts";
@@ -33,30 +34,42 @@ Deno.serve(async (request) => {
     if (!eventId) throw new HttpError(400, "missing_webhook_id");
 
     const service = createServiceClient();
-    const { data: stored, error: storeError } = await service.schema("private").from("webhook_events").upsert({
-      provider: "whop",
-      event_id: eventId,
-      event_type: event.type,
-      payload: event,
-      status: "received",
-      attempts: 1,
-    }, { onConflict: "provider,event_id", ignoreDuplicates: true }).select("id").maybeSingle();
-    if (storeError) throw storeError;
-    if (!stored) return json({ received: true, duplicate: true });
+    const { data: claimed, error: claimError } = await service.rpc("service_claim_webhook_event", {
+      p_provider: "whop",
+      p_event_id: eventId,
+      p_event_type: event.type,
+      p_payload: event,
+    });
+    if (claimError) throw claimError;
+    if (!claimed) return json({ received: true, duplicate: true });
 
     try {
       if (event.type.startsWith("membership.")) {
         await processMembershipEvent(service, event, eventId);
       }
-      await service.schema("private").from("webhook_events").update({
-        status: "processed",
-        processed_at: new Date().toISOString(),
-      }).eq("provider", "whop").eq("event_id", eventId);
+      const { error: markError } = await service.rpc("service_mark_webhook_event", {
+        p_provider: "whop",
+        p_event_id: eventId,
+        p_status: "processed",
+        p_last_error: null,
+      });
+      if (markError) throw markError;
     } catch (processingError) {
-      await service.schema("private").from("webhook_events").update({
-        status: "failed",
-        last_error: processingError instanceof Error ? processingError.message.slice(0, 1000) : "unknown",
-      }).eq("provider", "whop").eq("event_id", eventId);
+      const safeError = processingError instanceof Error
+        ? processingError.message.slice(0, 1000)
+        : "unknown";
+      const { error: markFailedError } = await service.rpc("service_mark_webhook_event", {
+        p_provider: "whop",
+        p_event_id: eventId,
+        p_status: "failed",
+        p_last_error: safeError,
+      });
+      if (markFailedError) {
+        console.error(JSON.stringify({
+          event: "whop_webhook_mark_failed_error",
+          code: markFailedError.code ?? null,
+        }));
+      }
       throw processingError;
     }
     return json({ received: true });
@@ -105,12 +118,12 @@ async function processMembershipEvent(service: ReturnType<typeof createServiceCl
 
   await enforceAccountPlanAfterMembershipChange(service, userId);
 
-  await service.schema("private").from("audit_events").insert({
-    user_id: userId,
+  await recordAuditEvent(service, {
+    userId,
     actor: "whop",
     action: event.type,
-    entity_type: "subscription",
-    entity_id: membershipId,
+    entityType: "subscription",
+    entityId: membershipId,
     metadata: { status, interval, event_id: eventId },
   });
 }
@@ -133,8 +146,12 @@ async function enforceAccountPlanAfterMembershipChange(service: ReturnType<typeo
     .select("id");
   if (archiveError) throw archiveError;
   if ((archived ?? []).length) {
-    await service.schema("private").from("audit_events").insert({
-      user_id: userId, actor: "system", action: "accounts.archived_on_weekly_plan", entity_type: "account", entity_id: null,
+    await recordAuditEvent(service, {
+      userId,
+      actor: "system",
+      action: "accounts.archived_on_weekly_plan",
+      entityType: "account",
+      entityId: null,
       metadata: { account_ids: (archived ?? []).map((item) => item.id) },
     });
   }

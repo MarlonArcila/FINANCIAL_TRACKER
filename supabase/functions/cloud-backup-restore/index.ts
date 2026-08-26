@@ -36,14 +36,22 @@ Deno.serve(async (request) => {
     });
     if (safetyRecordError) throw safetyRecordError;
 
-    const { data: restoreResult, error: restoreError } = await service.schema("private").rpc("restore_user_backup", { p_user_id: user.id, p_payload: document });
+    const { data: restoreResult, error: restoreError } = await service.rpc("service_restore_user_backup", {
+      p_user_id: user.id,
+      p_payload: document,
+      p_backup_id: backup.id,
+      p_safety_backup_id: safetyRemote.id,
+    });
     if (restoreError) throw restoreError;
     const now = new Date().toISOString();
-    await Promise.all([
-      service.from("cloud_backups").update({ status: "restored", restored_at: now }).eq("id", backup.id),
-      service.from("storage_connections").update({ last_restore_at: now, last_error: null }).eq("id", connection.id),
-      service.schema("private").from("audit_events").insert({ user_id: user.id, actor: "user", action: "cloud_backup.restored", entity_type: "cloud_backup", entity_id: backup.id, metadata: { safety_backup: safetyRemote.id } }),
-    ]);
+    const { error: backupStatusError } = await service.from("cloud_backups")
+      .update({ status: "restored", restored_at: now })
+      .eq("id", backup.id);
+    if (backupStatusError) throw backupStatusError;
+    const { error: connectionUpdateError } = await service.from("storage_connections")
+      .update({ last_restore_at: now, last_error: null })
+      .eq("id", connection.id);
+    if (connectionUpdateError) throw connectionUpdateError;
     return json({ restored: true, result: restoreResult, safetyBackupName: safetyRemote.name });
   } catch (error) { return errorResponse(error); }
 });

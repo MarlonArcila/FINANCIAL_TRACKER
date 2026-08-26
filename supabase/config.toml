@@ -2,10 +2,10 @@ project_id = "capitalflow-mvp"
 
 [api]
 enabled = true
-# Edge Functions use the service role against internal tables. Keep all grants to
-# anon/authenticated revoked for the private schema as defined by the migration.
+# The private schema is intentionally not exposed through PostgREST. Edge Functions
+# access private data only through narrowly-scoped public SECURITY DEFINER RPCs.
 extra_search_path = ["public", "extensions"]
-schemas = ["public", "storage", "graphql_public", "private"]
+schemas = ["public", "storage", "graphql_public"]
 
 [functions.whop-webhook]
 verify_jwt = false

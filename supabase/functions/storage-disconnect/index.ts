@@ -11,8 +11,14 @@ Deno.serve(async (request) => {
     if (!body.connectionId) throw new HttpError(422, "connection_id_required");
     const { data: connection, error } = await service.from("storage_connections").select("id,provider").eq("id", body.connectionId).eq("user_id", user.id).maybeSingle();
     if (error) throw error; if (!connection) throw new HttpError(404, "storage_connection_not_found");
-    await service.schema("private").from("storage_oauth_credentials").delete().eq("connection_id", connection.id);
-    await service.from("storage_connections").update({ status: "revoked", last_error: null }).eq("id", connection.id);
+    const { error: credentialError } = await service.rpc("service_delete_storage_oauth_credentials", {
+      p_connection_id: connection.id,
+    });
+    if (credentialError) throw credentialError;
+    const { error: updateError } = await service.from("storage_connections")
+      .update({ status: "revoked", last_error: null })
+      .eq("id", connection.id);
+    if (updateError) throw updateError;
     return json({ disconnected: true });
   } catch (error) { return errorResponse(error); }
 });
