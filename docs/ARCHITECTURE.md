@@ -173,9 +173,9 @@ El retorno del checkout es solo experiencia de usuario. La activación depende d
 - Tokens: hasta desconexión/revocación; siempre cifrados.
 - Cuerpo de email: memoria de proceso; no persistir por defecto.
 - Notificación cruda: no persistir; guardar texto sanitizado corto.
-- Candidatos rechazados: purga sugerida a 30 días.
-- Eventos dedupe: conservar huella y metadatos mínimos 90 días.
-- Auditoría: periodo definido legalmente; no incluir contenido financiero.
+- Candidatos rechazados: 30 días por defecto; configurable en `private.retention_policy`.
+- Eventos dedupe: 90 días por defecto; configurable en `private.retention_policy`.
+- Auditoría: periodo definido legalmente; no incluir contenido financiero. El purge automático no elimina `private.audit_events` mientras ese periodo siga pendiente de aprobación legal.
 - Advisor inputs: conservar solo si el usuario acepta historial; permitir borrar.
 
 ## 10. Observabilidad

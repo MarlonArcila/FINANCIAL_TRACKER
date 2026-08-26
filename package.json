@@ -10,14 +10,15 @@
   "scripts": {
     "dev": "npm run dev -w @capitalflow/web",
     "build": "npm run build -w @capitalflow/core && npm run build -w @capitalflow/web",
-    "test": "npm run test -w @capitalflow/core && npm run test:edge-parser && npm run test:private-boundary && npm run test:rate-limit-boundary",
+    "test": "npm run test -w @capitalflow/core && npm run test:edge-parser && npm run test:private-boundary && npm run test:rate-limit-boundary && npm run test:retention-boundary",
     "test:native": "bash scripts/test-android-parser.sh",
     "test:all": "npm test && npm run test:native",
     "typecheck": "npm run typecheck -w @capitalflow/core && npm run typecheck -w @capitalflow/web",
     "clean": "npm run clean -w @capitalflow/core && npm run clean -w @capitalflow/web",
     "test:edge-parser": "node --experimental-strip-types --test supabase/functions/_shared/*.test.ts",
     "test:private-boundary": "node scripts/assert-edge-private-boundary.mjs",
-    "test:rate-limit-boundary": "node scripts/assert-edge-rate-limit-boundary.mjs"
+    "test:rate-limit-boundary": "node scripts/assert-edge-rate-limit-boundary.mjs",
+    "test:retention-boundary": "node scripts/assert-retention-purge-boundary.mjs"
   },
   "engines": {
     "node": ">=22.12.0"
