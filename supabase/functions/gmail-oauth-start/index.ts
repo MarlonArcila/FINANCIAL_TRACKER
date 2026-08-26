@@ -1,6 +1,7 @@
 import { optionalEnv, requiredEnv } from "../_shared/env.ts";
 import { errorResponse, handleOptions, HttpError, json, readJson } from "../_shared/http.ts";
 import { createOAuthState } from "../_shared/oauth-state.ts";
+import { enforceUserRateLimit, RATE_LIMIT_POLICIES } from "../_shared/rate-limit.ts";
 import { assertEntitled, createServiceClient, requireUser } from "../_shared/supabase.ts";
 
 Deno.serve(async (request) => {
@@ -11,6 +12,7 @@ Deno.serve(async (request) => {
     const { user } = await requireUser(request);
     const service = createServiceClient();
     await assertEntitled(service, user.id);
+    await enforceUserRateLimit(service, user.id, RATE_LIMIT_POLICIES.GMAIL_OAUTH_START);
     const body = await readJson<{ returnUrl?: string }>(request, 10_000);
     const returnUrl = validateReturnUrl(body.returnUrl);
     const oauth = await createOAuthState(service, { userId: user.id, provider: "gmail", returnUrl });

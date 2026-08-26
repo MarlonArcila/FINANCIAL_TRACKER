@@ -1,5 +1,6 @@
 import { optionalEnv } from "../_shared/env.ts";
 import { errorResponse, handleOptions, HttpError, json, readJson } from "../_shared/http.ts";
+import { enforceUserRateLimit, RATE_LIMIT_POLICIES } from "../_shared/rate-limit.ts";
 import { assertAnnualEntitled, createServiceClient, requireUser } from "../_shared/supabase.ts";
 
 interface AdvisorRequest {
@@ -15,6 +16,7 @@ Deno.serve(async (request) => {
     const { user } = await requireUser(request);
     const service = createServiceClient();
     await assertAnnualEntitled(service, user.id);
+    await enforceUserRateLimit(service, user.id, RATE_LIMIT_POLICIES.AI_ADVISOR);
     const body = await readJson<AdvisorRequest>(request, 100_000);
     const plan = validateSafePlan(body.plan);
     const language = body.userPreferences?.language === "en" ? "en" : "es";
