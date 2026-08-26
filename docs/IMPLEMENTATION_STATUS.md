@@ -84,3 +84,7 @@ Configurar un entorno sandbox completo, ejecutar el checklist de `docs/DEPLOYMEN
 Code-level T13 hardening includes fail-closed CORS, production CSP/security headers, a bounded/versioned PWA cache, operational health RPC/Edge endpoint, two-tenant RLS regression coverage, pilot PWA verification, signed-APK automation, and a consolidated pilot-readiness runner. Rate limiting, retention purge, export/delete and the private Data API gateway were released in prior T13 checkpoints.
 
 The code implementation can be closed independently from external pilot evidence. Real Google Drive OAuth/backup/restore, Whop sandbox purchase/webhook, two-real-user RLS confirmation, signed APK on a physical device, deployed PWA/domain headers, and legal/privacy review remain external gates and must not be marked GREEN from repository evidence alone.
+
+### Pilot external-gates automation
+
+The repository now contains executable external-gate tooling rather than a checklist-only handoff: real Auth-user RLS isolation, browser-assisted Google Drive backup/restore, Whop sandbox checkout/webhook/cancellation, hosted CORS redeploy closure, signed APK/device verification, and legal/privacy evidence capture. `scripts/pilot-readiness.sh` is the single rerunnable entrypoint and reports `PENDING_INPUT` instead of treating unavailable credentials, infrastructure or human approvals as failures or fabricated GREEN evidence.
