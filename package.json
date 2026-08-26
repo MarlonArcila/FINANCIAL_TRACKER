@@ -10,7 +10,7 @@
   "scripts": {
     "dev": "npm run dev -w @capitalflow/web",
     "build": "npm run build -w @capitalflow/core && npm run build -w @capitalflow/web",
-    "test": "npm run test -w @capitalflow/core && npm run test:edge-parser && npm run test:private-boundary && npm run test:rate-limit-boundary && npm run test:retention-boundary",
+    "test": "npm run test -w @capitalflow/core && npm run test:edge-parser && npm run test:private-boundary && npm run test:rate-limit-boundary && npm run test:retention-boundary && npm run test:t13-boundary",
     "test:native": "bash scripts/test-android-parser.sh",
     "test:all": "npm test && npm run test:native",
     "typecheck": "npm run typecheck -w @capitalflow/core && npm run typecheck -w @capitalflow/web",
@@ -18,7 +18,16 @@
     "test:edge-parser": "node --experimental-strip-types --test supabase/functions/_shared/*.test.ts",
     "test:private-boundary": "node scripts/assert-edge-private-boundary.mjs",
     "test:rate-limit-boundary": "node scripts/assert-edge-rate-limit-boundary.mjs",
-    "test:retention-boundary": "node scripts/assert-retention-purge-boundary.mjs"
+    "test:retention-boundary": "node scripts/assert-retention-purge-boundary.mjs",
+    "test:cors-boundary": "node scripts/assert-edge-cors-boundary.mjs",
+    "test:pwa-boundary": "node scripts/assert-pwa-hardening.mjs",
+    "test:web-security-boundary": "node scripts/assert-web-security-boundary.mjs",
+    "test:t13-final-boundary": "node scripts/assert-t13-final-boundary.mjs",
+    "test:t13-boundary": "npm run test:cors-boundary && npm run test:pwa-boundary && npm run test:web-security-boundary && npm run test:t13-final-boundary",
+    "pilot:web": "node scripts/verify-pwa-staging.mjs",
+    "pilot:health": "node scripts/check-pilot-health.mjs",
+    "pilot:readiness": "bash scripts/pilot-readiness.sh",
+    "android:release": "bash scripts/build-signed-apk.sh"
   },
   "engines": {
     "node": ">=22.12.0"

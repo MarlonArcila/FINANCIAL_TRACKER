@@ -336,3 +336,11 @@ La telemetría de autonomía está en `private.automation_metrics_30d`, sin gran
 `listAccounts()` devuelve activas para operación. `listAllAccounts()` se usa en administración, filtros históricos y backup. `loadDashboardSummary(accountId)` permite un ámbito independiente: si se selecciona una cuenta, solo consulta sus transacciones y usa su moneda como moneda de presentación. `BACKUP_TABLES` ya incluye `accounts` con `select(*)`, de modo que activas y archivadas se conservan sin lógica especial adicional.
 
 Cuando el entitlement efectivo queda en semanal, el webhook de Whop archiva automáticamente las secundarias activas sin borrar movimientos. Si existe cualquier membresía anual activa y no vencida, el entitlement anual tiene precedencia.
+
+## T13 final hardening boundary
+
+The shared Edge HTTP boundary no longer uses wildcard CORS. Browser preflights are accepted only when `Origin` exactly matches the normalized HTTP(S) origin from `APP_URL`; missing or invalid configuration fails closed. The PWA service worker caches only the application shell, hashed `/assets/`, and explicit install assets, never arbitrary same-origin responses.
+
+Production web builds derive CSP and security headers from `apps/web/security-policy.ts`. Static hosts receive `public/_headers`; the Vite production build also injects a CSP meta fallback and preview serves the same headers.
+
+Operational health is exposed only through `public.service_operational_health()` to `service_role` and through the custom-auth `health-status` Edge Function protected by `CRON_SECRET`. The response exposes aggregate counts/status only, never tokens, user identifiers, message bodies, or financial content.

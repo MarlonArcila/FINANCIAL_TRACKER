@@ -41,3 +41,6 @@ verify_jwt = false
 
 [functions.purge-expired-data]
 verify_jwt = false
+
+[functions.health-status]
+verify_jwt = false

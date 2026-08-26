@@ -10,7 +10,8 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "clean": "rm -rf dist",
     "android:install-plugin": "node scripts/install-android-plugin.mjs",
-    "android:sync": "npm run build && cap sync android"
+    "android:sync": "npm run build && cap sync android",
+    "prebuild": "node --experimental-strip-types scripts/write-static-security-headers.ts"
   },
   "dependencies": {
     "@capacitor/core": "^8.0.0",

@@ -452,3 +452,7 @@ native/android/src/main/java/com/capitalflow/notification/
 - Eliminar campos `automationRatePercent`/`interventionRatePercent` de `DashboardSummary`.
 - Eliminar tarjetas, textos y controles numéricos de umbral del frontend.
 - Mantener los umbrales técnicos en `financial_preferences`/backend para evolución del sistema.
+
+### T13 implementation checkpoint — 2026-08-26
+
+Repository implementation covers the T13 code surface: export/delete, private backend gateway, rate limiting, configurable retention purge, fail-closed CORS, CSP/security headers, versioned PWA cache, operational health, RLS regression test and pilot/APK verification tooling. Remaining items in the T13 definition of done that require real infrastructure or human/legal evidence are tracked by `scripts/pilot-readiness.sh` and belong to the pilot external-gates phase; they are not silently inferred as complete.
