@@ -1,3 +1,4 @@
+import { recordAuditEvent } from "../_shared/audit.ts";
 import { optionalEnv, requiredEnv } from "../_shared/env.ts";
 import { errorResponse, handleOptions, HttpError, json, readJson } from "../_shared/http.ts";
 import { createServiceClient, requireUser } from "../_shared/supabase.ts";
@@ -38,12 +39,12 @@ Deno.serve(async (request) => {
       console.error("Whop checkout failed", response.status);
       throw new HttpError(502, "checkout_provider_error");
     }
-    await service.schema("private").from("audit_events").insert({
-      user_id: user.id,
+    await recordAuditEvent(service, {
+      userId: user.id,
       actor: "user",
       action: "checkout.created",
-      entity_type: "whop_checkout",
-      entity_id: typeof payload.id === "string" ? payload.id : null,
+      entityType: "whop_checkout",
+      entityId: typeof payload.id === "string" ? payload.id : null,
       metadata: { interval: body.interval, plan_id: planId },
     });
     return json({ purchaseUrl: payload.purchase_url });

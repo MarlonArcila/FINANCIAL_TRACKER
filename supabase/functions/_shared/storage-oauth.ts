@@ -190,28 +190,14 @@ export async function saveStorageTokens(
   connectionId: string,
   tokens: StorageTokenSet,
 ): Promise<void> {
-  const { data: current, error: currentError } = await service
-    .schema("private")
-    .from("storage_oauth_credentials")
-    .select("encrypted_refresh_token")
-    .eq("connection_id", connectionId)
-    .maybeSingle();
-
-  if (currentError) throw currentError;
-
-  const { error } = await service
-    .schema("private")
-    .from("storage_oauth_credentials")
-    .upsert({
-      connection_id: connectionId,
-      encrypted_access_token: await encryptSecret(tokens.accessToken),
-      encrypted_refresh_token: tokens.refreshToken
-        ? await encryptSecret(tokens.refreshToken)
-        : current?.encrypted_refresh_token ?? null,
-      token_expires_at: tokens.expiresAt,
-    }, {
-      onConflict: "connection_id",
-    });
+  const { error } = await service.rpc("service_save_storage_oauth_credentials", {
+    p_connection_id: connectionId,
+    p_encrypted_access_token: await encryptSecret(tokens.accessToken),
+    p_encrypted_refresh_token: tokens.refreshToken
+      ? await encryptSecret(tokens.refreshToken)
+      : null,
+    p_token_expires_at: tokens.expiresAt,
+  });
 
   if (error) throw error;
 }
@@ -226,12 +212,9 @@ export async function getStorageAccessToken(
   requireGoogleDriveProvider(connection.provider);
 
   const { data, error } = await service
-    .schema("private")
-    .from("storage_oauth_credentials")
-    .select(
-      "encrypted_access_token,encrypted_refresh_token,token_expires_at",
-    )
-    .eq("connection_id", connection.id)
+    .rpc("service_get_storage_oauth_credentials", {
+      p_connection_id: connection.id,
+    })
     .single();
 
   if (error) throw error;

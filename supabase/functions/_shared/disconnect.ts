@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "npm:@supabase/supabase-js@2";
 
+import { recordAuditEvent } from "./audit.ts";
 import { getGoogleAccessToken } from "./gmail.ts";
 
 export interface DisconnectableConnection {
@@ -44,12 +45,12 @@ export async function disconnectMailConnection(
 
   if (deleteError) throw deleteError;
 
-  await service.schema("private").from("audit_events").insert({
-    user_id: connection.user_id,
+  await recordAuditEvent(service, {
+    userId: connection.user_id,
     actor,
     action: "source.disconnected",
-    entity_type: "source_connection",
-    entity_id: connection.id,
+    entityType: "source_connection",
+    entityId: connection.id,
     metadata: {
       provider: connection.provider,
       remote_revoked: remoteRevoked,

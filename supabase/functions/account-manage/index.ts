@@ -1,4 +1,5 @@
 import { decideAccountCreatePolicy, type AccountPurpose, type SubscriptionInterval } from "../_shared/account-policy.ts";
+import { recordAuditEvent } from "../_shared/audit.ts";
 import { reprocessPendingCandidates } from "../_shared/automation.ts";
 import { errorResponse, handleOptions, HttpError, json, readJson } from "../_shared/http.ts";
 import { assertEntitled, createServiceClient, requireUser } from "../_shared/supabase.ts";
@@ -78,7 +79,14 @@ async function activeInterval(service: ReturnType<typeof createServiceClient>, u
 }
 
 async function audit(service: ReturnType<typeof createServiceClient>, userId: string, action: string, entityId: string, metadata: Record<string, unknown>) {
-  await service.schema("private").from("audit_events").insert({ user_id: userId, actor: "user", action, entity_type: "account", entity_id: entityId, metadata });
+  await recordAuditEvent(service, {
+    userId,
+    actor: "user",
+    action,
+    entityType: "account",
+    entityId,
+    metadata,
+  });
 }
 
 function isUuid(value: unknown): value is string {

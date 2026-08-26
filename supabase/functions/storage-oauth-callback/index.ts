@@ -1,3 +1,4 @@
+import { recordAuditEvent } from "../_shared/audit.ts";
 import { errorResponse, HttpError } from "../_shared/http.ts";
 import { assertAnnualEntitled, createServiceClient } from "../_shared/supabase.ts";
 import { consumeStorageOAuthState, exchangeStorageCode, saveStorageTokens, storageProfile, storageScopes } from "../_shared/storage-oauth.ts";
@@ -21,7 +22,13 @@ Deno.serve(async (request) => {
     }, { onConflict: "user_id,provider" }).select("*").single();
     if (error) throw error;
     await saveStorageTokens(service, connection.id, tokens);
-    await service.schema("private").from("audit_events").insert({ user_id: oauth.userId, actor: oauth.provider, action: "storage.connected", entity_type: "storage_connection", entity_id: connection.id });
+    await recordAuditEvent(service, {
+      userId: oauth.userId,
+      actor: oauth.provider,
+      action: "storage.connected",
+      entityType: "storage_connection",
+      entityId: connection.id,
+    });
     const redirect = new URL(oauth.returnUrl); redirect.searchParams.set("storage", oauth.provider); redirect.searchParams.set("status", "connected");
     return Response.redirect(redirect.toString(), 302);
   } catch (error) { return errorResponse(error); }

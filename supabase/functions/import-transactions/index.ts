@@ -1,3 +1,4 @@
+import { recordAuditEvent } from "../_shared/audit.ts";
 import { errorResponse, handleOptions, HttpError, json, readJson } from "../_shared/http.ts";
 import { assertEntitled, createServiceClient, requireUser } from "../_shared/supabase.ts";
 
@@ -112,12 +113,12 @@ Deno.serve(async (request) => {
     };
     const { error: updateError } = await service.from("data_imports").update(nextStats).eq("id", importRecord.id).eq("user_id", user.id);
     if (updateError) throw updateError;
-    await service.schema("private").from("audit_events").insert({
-      user_id: user.id,
+    await recordAuditEvent(service, {
+      userId: user.id,
       actor: "user",
       action: body.finalChunk ? "data.import.completed" : "data.import.chunk",
-      entity_type: "data_import",
-      entity_id: importRecord.id,
+      entityType: "data_import",
+      entityId: importRecord.id,
       metadata: { chunk_rows: body.rows.length, imported: insertedCount, duplicates: duplicateCount, rejected: rejected.length },
     });
 

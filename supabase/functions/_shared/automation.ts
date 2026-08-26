@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "npm:@supabase/supabase-js@2";
 
+import { recordAuditEvent } from "./audit.ts";
 import type { ParsedCandidate } from "./financial-parser.ts";
 import { decideAutomationPolicy } from "./automation-policy.ts";
 import { shouldHoldForCalibration } from "./onboarding-policy.ts";
@@ -344,15 +345,18 @@ async function markReview(
 }
 
 async function audit(service: SupabaseClient, userId: string, action: string, entityId: string, metadata: Record<string, unknown>): Promise<void> {
-  const { error } = await service.schema("private").from("audit_events").insert({
-    user_id: userId,
-    actor: "system",
-    action,
-    entity_type: "transaction_candidate",
-    entity_id: entityId,
-    metadata,
-  });
-  if (error) console.warn("automation audit failed", error.message);
+  try {
+    await recordAuditEvent(service, {
+      userId,
+      actor: "system",
+      action,
+      entityType: "transaction_candidate",
+      entityId,
+      metadata,
+    });
+  } catch {
+    console.warn(JSON.stringify({ event: "automation_audit_failed", action }));
+  }
 }
 
 function normalize(value: string): string {

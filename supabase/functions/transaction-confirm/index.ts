@@ -1,3 +1,4 @@
+import { recordAuditEvent } from "../_shared/audit.ts";
 import { errorResponse, handleOptions, HttpError, json, readJson } from "../_shared/http.ts";
 import { reprocessPendingCandidates } from "../_shared/automation.ts";
 import { assertEntitled, createServiceClient, requireUser } from "../_shared/supabase.ts";
@@ -54,13 +55,12 @@ Deno.serve(async (request) => {
     if (error) throw error;
     if (!data) throw new HttpError(404, "candidate_not_found_or_not_pending");
 
-    await service.schema("private").from("audit_events").insert({
-      user_id: user.id,
+    await recordAuditEvent(service, {
+      userId: user.id,
       actor: "user",
       action: `candidate.${status}`,
-      entity_type: "transaction_candidate",
-      entity_id: body.candidateId,
-      metadata: {},
+      entityType: "transaction_candidate",
+      entityId: body.candidateId,
     });
     return json({ action: status });
   } catch (error) {
@@ -147,12 +147,12 @@ async function learnFromReview(
     }
   }
 
-  await service.schema("private").from("audit_events").insert({
-    user_id: userId,
+  await recordAuditEvent(service, {
+    userId,
     actor: "system",
     action: "automation.rules_learned_from_review",
-    entity_type: "transaction",
-    entity_id: transactionId,
+    entityType: "transaction",
+    entityId: transactionId,
     metadata: {
       candidate_id: body.candidateId,
       category_rule: Boolean(body.categoryId && body.learnCategory !== false && candidate.merchant),
