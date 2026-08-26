@@ -1,9 +1,11 @@
 # Estado de implementación — CapitalFlow MVP
 
-**Corte:** 13 de agosto de 2026  
+**Corte:** 26 de agosto de 2026
 **Versión del scaffold:** 0.1.0
 
 > Criterio documental vigente: la ingestión opera por excepción. Las señales inequívocas pueden auto-contabilizarse; `transaction_candidates` queda reservada para ambigüedad, conflicto o riesgo. Las reglas aprendidas reevalúan pendientes y la telemetría de automatización es exclusivamente interna.
+
+> Contrato de proveedores vigente: correo **Gmail** y backup anual **Google Drive `appDataFolder`**. El release de la frontera privada Data API quedó en `main` `e251ae9b85bc5517246f0aaced70b2a4a6db24c6`, con migración, RPC/ACL, despliegue transitivo de Edge Functions y smoke remoto GREEN.
 
 ## Auditoría de seguridad de Edge Functions — 15 de agosto de 2026
 
@@ -12,7 +14,7 @@
 - Gmail Pub/Sub en modo OIDC exige ahora el correo de la service account configurada y `email_verified`; el fallback por token queda limitado a instalaciones sin audiencia OIDC.
 - `cloud-backup-worker` reutiliza la validación constante de `CRON_SECRET` de los demás workers.
 - Los errores, logs y respuestas de proveedores ya no incluyen cuerpos remotos, payloads ni mensajes arbitrarios; se conservan sólo categorías y códigos seguros.
-- Cobertura nueva: estados OAuth de almacenamiento caducados/usados/malformados, identidad OIDC no confiable, secreto CRON inválido y respuesta de error sin filtración. Las pruebas E2E contra Google, Microsoft, Whop y Supabase real siguen pendientes de infraestructura externa.
+- Cobertura nueva: estados OAuth de almacenamiento caducados/usados/malformados, identidad OIDC no confiable, secreto CRON inválido y respuesta de error sin filtración. Las pruebas E2E que aún requieren infraestructura externa se limitan a los gates no cerrados de Google Drive, Whop, RLS multiusuario, Android firmado y PWA staging.
 
 ## Implementado
 
@@ -24,12 +26,12 @@
 - Motor determinista para priorizar gastos esenciales, reserva, metas, gasto discrecional e inversión; proyecciones de interés compuesto por escenarios.
 - Explicación opcional con IA sin enviar correos, notificaciones, tokens ni identificadores financieros.
 - Android `NotificationListenerService`, descubrimiento local automático cuando la allowlist está vacía, filtro avanzado opcional, parser local, sanitización, cola persistente y bridge Capacitor.
-- OAuth server-side para Gmail y Outlook, tokens cifrados, sincronización incremental, renovación de watches/subscriptions y webhooks rápidos que encolan trabajo.
+- OAuth server-side para Gmail, tokens cifrados, sincronización incremental, renovación de watches y Pub/Sub; el flujo real de Gmail ya fue validado en el entorno de candidato.
 - Whop checkout semanal/anual, webhook firmado, idempotencia y sincronización de membresía.
 - PostgreSQL con cantidades en unidades menores enteras, RLS, esquema privado, vistas de lectura, auditoría, deduplicación y validación de referencias del mismo tenant.
 - Exportación, desconexión de fuentes y eliminación de cuenta disponibles incluso sin membresía activa.
 - Importación de historial desde CSV/TSV/TXT/XLSX/XLS/JSON para planes semanal y anual, con mapeo, preview, categorías opcionales, batches y deduplicación exacta.
-- Backup/restore anual en Google Drive `appDataFolder` y OneDrive App Folder, con OAuth separado del correo, tokens cifrados, checksum SHA-256 y copia `pre_restore`.
+- Backup/restore anual en Google Drive `appDataFolder`, con OAuth separado del correo, tokens cifrados, checksum SHA-256 y copia `pre_restore`; el E2E OAuth/upload/download/restore real de Drive sigue pendiente.
 - Backup automático anual configurable como diario, semanal o manual; semanal por defecto.
 - Plan semanal limitado a una cuenta principal activa; plan anual con cuentas secundarias independientes para viaje, trabajo, proyectos, compartidas u otros seguimientos.
 - Dashboard con ámbito por cuenta y libro filtrable para analizar esos seguimientos sin mezclarlos con la principal.
@@ -43,7 +45,7 @@
 ## Evidencia de verificación incluida
 
 - 18 pruebas del núcleo: parsing financiero, importación CSV/TSV/JSON, montos/fechas, ruido/OTP, deduplicación, asignación, déficit, interés compuesto y rentabilidad.
-- pruebas server-side/políticas para automatización, OAuth, backups y límites de autenticación: automatización, calibración de onboarding, política de cuentas, backup format/checksum, Gmail/Outlook, sanitización y canonicalización de candidatas Android.
+- pruebas server-side/políticas para automatización, OAuth, backups y límites de autenticación: automatización, calibración de onboarding, política de cuentas, backup format/checksum, Gmail, sanitización y canonicalización de candidatas Android.
 - 4 smoke tests Java sobre el parser Android, incluida la regresión que evita interpretar “Mercado” como el código de moneda `CAD`.
 - Validación sintáctica TypeScript del frontend y de todas las Edge Functions.
 - Workflow de GitHub Actions que instala dependencias, ejecuta `test:all`, hace typecheck estricto y construye la PWA.
@@ -54,11 +56,11 @@ No se ejecutaron dentro de este entorno porque dependen de credenciales o SDK ex
 
 - build completo Vite con dependencias descargadas;
 - migración contra una instancia real de Supabase y pruebas RLS multiusuario;
-- ciclos OAuth reales con Google/Microsoft para correo y almacenamiento;
-- upload/download/restore reales en Google Drive y OneDrive;
+- ciclo OAuth real de Google Drive para almacenamiento;
+- upload/download/restore reales en Google Drive;
 - webhooks y checkout del sandbox de Whop;
 - proyecto Android generado por Capacitor, pruebas JUnit/Android y APK firmado;
-- entrega real de Pub/Sub de Gmail y change notifications de Microsoft Graph;
+- revalidación de entrega Pub/Sub de Gmail solo si cambia su configuración o código;
 - prueba E2E en un teléfono con notificaciones de aplicaciones permitidas.
 
 El workflow de CI cubre la instalación, typecheck y build web. `docs/DEPLOYMENT.md` contiene el procedimiento para completar las validaciones con los servicios y secretos del propietario.

@@ -10,7 +10,7 @@ Acciones todavía limitadas a un entorno local y desechable, pero que pueden req
 
 ## RED — intervención humana explícita
 
-Leer, descubrir o imprimir secretos/credenciales; `.env`, `.env.local`, OAuth, service-role keys o historiales sensibles; Supabase remoto, `--linked`, `db push`, migraciones remotas, Vault o secrets set; deploy, staging/producción; Cron remoto; Google/Gmail/Drive, Microsoft/Outlook/Graph/OneDrive, Whop u OpenAI reales; OAuth real; `git push`, PR, merge o tags remotos; cambios de facturación; borrar datos del usuario, bases no desechables o infraestructura; cualquier operación irreversible.
+Leer, descubrir o imprimir secretos/credenciales; `.env`, `.env.local`, OAuth, service-role keys o historiales sensibles; Supabase remoto, `--linked`, `db push`, migraciones remotas, Vault o secrets set; deploy, staging/producción; Cron remoto; Google/Gmail/Drive, Whop u OpenAI reales; OAuth real; `git push`, PR, merge o tags remotos; cambios de facturación; borrar datos del usuario, bases no desechables o infraestructura; cualquier operación irreversible.
 
 ## Regla de decisión
 

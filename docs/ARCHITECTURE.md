@@ -28,7 +28,6 @@ flowchart TB
   subgraph External[Proveedores]
     WHOP[Whop]
     GOOGLE[Google OAuth/Gmail/PubSub]
-    MS[Microsoft Entra/Graph]
     LLM[Gateway IA opcional]
   end
 
@@ -40,7 +39,6 @@ flowchart TB
   EDGE --> PRIVATE
   EDGE --> WHOP
   EDGE --> GOOGLE
-  EDGE --> MS
   EDGE --> LLM
 ```
 
@@ -122,17 +120,7 @@ La cola debe implementar una operación de reserva/confirmación o conservar res
 8. `gmail-pubsub-webhook` valida el mensaje y ejecuta sync incremental.
 9. Cron renueva el watch antes de `expiration`.
 
-## 6. Flujo Outlook
-
-1. OAuth Authorization Code con PKCE/servidor y `state` firmado.
-2. Callback cifra tokens y obtiene identidad de buzón.
-3. Sync inicial usa `messages/delta` en Inbox.
-4. Se conserva `@odata.deltaLink` como cursor opaco.
-5. Microsoft Graph envía notificaciones al webhook validado.
-6. El webhook comprueba `clientState` y dispara delta sync.
-7. Cron renueva la subscription antes de expirar.
-
-## 7. Flujo Whop
+## 6. Flujo Whop
 
 ```mermaid
 sequenceDiagram
@@ -159,7 +147,7 @@ sequenceDiagram
 
 El retorno del checkout es solo experiencia de usuario. La activación depende del webhook.
 
-## 8. Modelo de autorización
+## 7. Modelo de autorización
 
 - `auth.users.id` es la identidad raíz.
 - Todas las tablas públicas incluyen `user_id` o usan una relación que llega al usuario.
@@ -169,19 +157,18 @@ El retorno del checkout es solo experiencia de usuario. La activación depende d
 - `source_connections` es lectura del propietario; credenciales están en `private.oauth_credentials`.
 - La eliminación de cuenta utiliza función privilegiada y auditable.
 
-## 9. Idempotencia
+## 8. Idempotencia
 
 | Operación | Clave |
 |---|---|
 | Whop webhook | `webhook-id` / event ID |
 | Gmail message | provider + external message ID |
-| Outlook message | provider + message ID |
 | Android notification | fingerprint estable + ventana |
 | Checkout | user + interval + ventana/idempotency key |
 | Aceptar candidata | `candidate_id` único con `created_transaction_id` |
 | Aporte a meta | `transaction_id` único cuando existe |
 
-## 10. Retención y minimización
+## 9. Retención y minimización
 
 - Tokens: hasta desconexión/revocación; siempre cifrados.
 - Cuerpo de email: memoria de proceso; no persistir por defecto.
@@ -191,14 +178,14 @@ El retorno del checkout es solo experiencia de usuario. La activación depende d
 - Auditoría: periodo definido legalmente; no incluir contenido financiero.
 - Advisor inputs: conservar solo si el usuario acepta historial; permitir borrar.
 
-## 11. Observabilidad
+## 10. Observabilidad
 
 - Correlation ID por request y sync.
 - Métricas: duración, mensajes leídos, candidatos creados, duplicados, errores y renovaciones.
 - Logs: provider, status, error code y IDs internos; nunca token/body.
 - Alertas: webhook inválido repetido, renovación próxima fallida, cola atascada, error rate, RLS test failure.
 
-## 12. Estrategia offline
+## 11. Estrategia offline
 
 P0:
 
@@ -213,7 +200,7 @@ P1:
 - cifrado local para datos sensibles cuando sea viable;
 - background sync cuando el navegador lo permita.
 
-## 13. Adaptación a otras plataformas de IA
+## 12. Adaptación a otras plataformas de IA
 
 - **Lovable:** mantener React/Vite/Supabase; importar SQL, core y páginas.
 - **Replit:** ejecutar el monorepo; opcionalmente reemplazar Edge Functions por Express/Fastify manteniendo OpenAPI.
@@ -222,7 +209,7 @@ P1:
 
 La parte Android siempre requiere exportar o mantener código nativo; un constructor puramente web no puede sustituir `NotificationListenerService`.
 
-## 14. Portabilidad de datos e importación
+## 13. Portabilidad de datos e importación
 
 El archivo se procesa primero en el cliente para minimizar transferencia de información cruda:
 
@@ -248,7 +235,7 @@ transactions(source=import_file)
 
 El backend no conserva el Excel/CSV original. `data_imports` almacena nombre, tipo, hash del archivo, mapeo y métricas. Esto reduce superficie de datos y permite auditar qué ocurrió sin convertir CapitalFlow en repositorio de archivos fuente.
 
-## 15. Backup y restore anual
+## 14. Backup y restore anual
 
 La conexión de almacenamiento usa credenciales separadas de las conexiones de correo.
 
@@ -257,7 +244,7 @@ Plan anual verificado
         ↓
 storage-oauth-start
         ↓
-Google drive.appdata / Microsoft Files.ReadWrite.AppFolder
+Google drive.appdata
         ↓
 storage_connections + encrypted storage_oauth_credentials
         ↓
@@ -267,7 +254,7 @@ buildBackupDocument()
         ↓
 capitalflow-backup-v2 + SHA-256
         ↓
-Google appDataFolder / OneDrive App Folder
+Google appDataFolder
 ```
 
 Restore:
@@ -291,21 +278,20 @@ El archivo excluye entitlement Whop, OAuth, webhooks, correo crudo y otras crede
 ### Permisos mínimos
 
 - Google Drive: `https://www.googleapis.com/auth/drive.appdata`; el archivo se crea con `parents:["appDataFolder"]`.
-- OneDrive: `Files.ReadWrite.AppFolder`; Microsoft limita el acceso de la app a su carpeta de aplicación.
 
 `cloud-storage.ts` es la frontera del proveedor. Agregar otro almacenamiento debe implementarse detrás de esa frontera y no alterar el dominio financiero ni `capitalflow-backup-v2`.
 
 
-## 16. Onboarding autónomo y espacios de cuenta
+## 15. Onboarding autónomo y espacios de cuenta
 
-### 16.1 Gate persistente
+### 15.1 Gate persistente
 
 ```text
 Auth + suscripción activa
         ↓
 OnboardingGate
         ↓
-monedas → cuenta principal → Gmail/Outlook → permiso Android → calibración
+monedas → cuenta principal → Gmail → permiso Android → calibración
         ↓
 profiles.onboarding_completed + onboarding_state.completed_at
         ↓
@@ -314,7 +300,7 @@ AppShell / dashboard
 
 `onboarding_state` desacopla el progreso del navegador, por lo que OAuth, recargas y reinicios no reinician el proceso. En PWA pura el permiso de notificaciones externas se marca como no aplicable; en APK es requisito antes de terminar. Si no existen tres ejemplos recientes, una búsqueda de calibración sin pendientes permite finalizar y el aprendizaje continúa después.
 
-### 16.2 Bucle de aprendizaje
+### 15.2 Bucle de aprendizaje
 
 ```text
 señal nueva
@@ -338,7 +324,7 @@ resolver automáticamente excepciones similares
 
 La telemetría de autonomía está en `private.automation_metrics_30d`, sin grants a `authenticated`; nunca forma parte del contrato del frontend.
 
-### 16.3 Cuentas por entitlement
+### 15.3 Cuentas por entitlement
 
 `accounts` incorpora `is_primary`, `purpose`, `purpose_label` y `archived_at`. `account-manage` y el trigger `private.enforce_account_plan()` aplican la misma política:
 

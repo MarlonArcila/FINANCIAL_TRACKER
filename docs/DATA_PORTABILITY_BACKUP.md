@@ -5,7 +5,7 @@
 CapitalFlow incorpora dos capacidades distintas:
 
 1. **Importación/migración**: semanal y anual. Permite comenzar con historial desde Excel, CSV, TSV, TXT o JSON.
-2. **Backup/restore conectado**: anual. Guarda copias versionadas en Google Drive o OneDrive y está preparado para nuevos proveedores.
+2. **Backup/restore conectado**: anual. Guarda copias versionadas en Google Drive `appDataFolder`; la frontera de almacenamiento queda preparada para proveedores futuros sin incluirlos en el contrato actual.
 
 ## Importación
 
@@ -34,9 +34,6 @@ El archivo `capitalflow-backup-v2` contiene únicamente estado financiero restau
 
 Se usa Drive API con el scope `drive.appdata` y `appDataFolder`, evitando acceso general al Drive del usuario.
 
-### Microsoft
-
-Se usa Microsoft Graph con `Files.ReadWrite.AppFolder`; la app trabaja en su carpeta especial dentro de OneDrive.
 
 ## Restore
 

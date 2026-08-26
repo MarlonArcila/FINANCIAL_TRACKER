@@ -103,18 +103,6 @@ paths:
                 connectionId: { type: string, format: uuid }
       responses:
         "200": { description: Synchronization result }
-  /outlook-oauth-start:
-    post:
-      summary: Return a Microsoft authorization URL.
-      operationId: startOutlookOAuth
-      responses:
-        "200": { description: Authorization URL }
-  /outlook-sync:
-    post:
-      summary: Synchronize an Outlook connection using delta.
-      operationId: syncOutlook
-      responses:
-        "200": { description: Synchronization result }
   /ai-advisor:
     post:
       summary: Explain an already calculated deterministic allocation plan.
@@ -191,7 +179,7 @@ paths:
         "422": { description: Invalid account operation }
   /storage-oauth-start:
     post:
-      summary: Start annual-only OAuth for Google Drive or OneDrive backup.
+      summary: Start annual-only OAuth for Google Drive backup.
       operationId: startStorageOAuth
       requestBody:
         required: true
@@ -201,7 +189,7 @@ paths:
               type: object
               required: [provider]
               properties:
-                provider: { type: string, enum: [google_drive, onedrive] }
+                provider: { type: string, enum: [google_drive] }
                 returnUrl: { type: string, format: uri }
       responses:
         "200": { description: Authorization URL }
@@ -299,7 +287,7 @@ components:
       required: [localId, provider, occurredAt, proposedKind, amountMinor, currency, confidence, fingerprint]
       properties:
         localId: { type: string }
-        provider: { type: string, enum: [android_notification, gmail, outlook] }
+        provider: { type: string, enum: [android_notification, gmail] }
         externalId: { type: [string, "null"] }
         appPackage: { type: [string, "null"] }
         occurredAt: { type: string, format: date-time }
