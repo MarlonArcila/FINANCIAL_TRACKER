@@ -15,6 +15,8 @@ try {
   });
   const authorizationUrl = started.payload?.authorizationUrl;
   if (typeof authorizationUrl !== "string") throw new Error("DRIVE_AUTHORIZATION_URL_MISSING");
+  const requestedScopes = new Set((new URL(authorizationUrl).searchParams.get("scope") ?? "").split(/\s+/u).filter(Boolean));
+  if (!requestedScopes.has("https://www.googleapis.com/auth/drive.appdata")) throw new Error("DRIVE_AUTHORIZATION_URL_MISSING_APPDATA_SCOPE");
   console.log("GOOGLE_DRIVE_ACTION=AUTHORIZE_APPDATAFOLDER_IN_BROWSER");
   openBrowser(authorizationUrl);
 
@@ -27,7 +29,7 @@ try {
   }, { timeoutMs });
   connectionId = connection.id;
   const scopes = Array.isArray(connection.granted_scopes) ? connection.granted_scopes : [];
-  if (!scopes.includes("https://www.googleapis.com/auth/drive.appdata")) throw new Error("DRIVE_APPDATA_SCOPE_NOT_GRANTED");
+  if (!scopes.some((scope) => scope === "drive.appdata" || scope === "https://www.googleapis.com/auth/drive.appdata")) throw new Error("DRIVE_APPDATA_SCOPE_NOT_GRANTED");
 
   const marker = `Drive E2E ${Date.now()}`;
   const { data: account, error: accountError } = await pilot.client.from("accounts").insert({
