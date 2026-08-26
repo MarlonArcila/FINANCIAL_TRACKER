@@ -2,6 +2,9 @@
 set -euo pipefail
 ROOT="$(git rev-parse --show-toplevel)"
 cd "$ROOT"
+: "${CAPACITOR_APP_ID:?CAPACITOR_APP_ID is required for a pilot release}"
+[[ "$CAPACITOR_APP_ID" =~ ^[A-Za-z][A-Za-z0-9_]*(\.[A-Za-z][A-Za-z0-9_]*){2,}$ ]] || { echo "STOP: CAPACITOR_APP_ID_INVALID" >&2; exit 1; }
+[[ "$CAPACITOR_APP_ID" != com.example.* ]] || { echo "STOP: EXAMPLE_ANDROID_APP_ID_NOT_ALLOWED" >&2; exit 1; }
 : "${ANDROID_KEYSTORE_PATH:?ANDROID_KEYSTORE_PATH is required}"
 : "${ANDROID_KEYSTORE_PASSWORD:?ANDROID_KEYSTORE_PASSWORD is required}"
 : "${ANDROID_KEY_ALIAS:?ANDROID_KEY_ALIAS is required}"
@@ -9,6 +12,13 @@ cd "$ROOT"
 [[ -f "$ANDROID_KEYSTORE_PATH" ]] || { echo "STOP: android_keystore_not_found" >&2; exit 1; }
 command -v java >/dev/null || { echo "STOP: java_not_found" >&2; exit 1; }
 
+if [[ -d apps/web/android ]]; then
+  EXISTING_APP_ID="$(grep -RhoE 'applicationId[[:space:]]+["\x27][^"\x27]+["\x27]' apps/web/android/app/build.gradle* 2>/dev/null | head -1 | sed -E 's/.*["\x27]([^"\x27]+)["\x27].*/\1/' || true)"
+  if [[ -n "$EXISTING_APP_ID" && "$EXISTING_APP_ID" != "$CAPACITOR_APP_ID" ]]; then
+    echo "ANDROID_REGENERATE_FOR_APP_ID=$CAPACITOR_APP_ID"
+    rm -rf apps/web/android
+  fi
+fi
 if [[ ! -d apps/web/android ]]; then
   npm run build
   npm exec -w @capitalflow/web cap add android
@@ -45,4 +55,4 @@ SIGNED="artifacts/capitalflow-${SHA}-release.apk"
 "$APKSIGNER" verify --verbose --print-certs "$SIGNED"
 rm -f "$ALIGNED"
 sha256sum "$SIGNED" | tee "${SIGNED}.sha256"
-printf 'SIGNED_APK=%s\nANDROID_RELEASE_SHA=%s\nANDROID_SIGNED_APK=GREEN\n' "$SIGNED" "$(git rev-parse HEAD)"
+printf 'SIGNED_APK=%s\nANDROID_APP_ID=%s\nANDROID_RELEASE_SHA=%s\nANDROID_SIGNED_APK=GREEN\n' "$SIGNED" "$CAPACITOR_APP_ID" "$(git rev-parse HEAD)"

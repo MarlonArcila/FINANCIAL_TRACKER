@@ -456,3 +456,19 @@ Operations can run `npm run pilot:health` with `SUPABASE_URL` and `CRON_SECRET` 
 For Android release, keep signing material outside the repository and export `ANDROID_KEYSTORE_PATH`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS` and `ANDROID_KEY_PASSWORD`, then run `npm run android:release`. The helper creates, zipaligns, signs, verifies and hashes the release APK under `artifacts/`.
 
 `npm run pilot:readiness` is the next-stage operator gate. It reuses code tests, can optionally run local pgTAP, verifies a deployed PWA and operational health when credentials/URLs are supplied, verifies a signed APK when `PILOT_APK_PATH` is supplied, and reports the remaining real-provider/legal gates explicitly instead of inventing evidence.
+
+## Pilot external-gates automation
+
+After T13 code implementation is merged, use `npm run pilot:readiness` as the single operator entrypoint. It never invents external evidence: gates run only when their real credentials/infrastructure are supplied.
+
+Required inputs by gate:
+
+- hosted CORS + PWA: `CF_PILOT_APP_URL` with the real HTTPS pilot origin;
+- operational health: `CRON_SECRET` (`SUPABASE_URL` is derived from the project ref when omitted);
+- two-real-user RLS: `SUPABASE_PUBLISHABLE_KEY` plus `SUPABASE_SECRET_KEY` (legacy anon/service-role aliases are accepted);
+- Google Drive E2E: the same Supabase keys, real Google OAuth secrets already hosted, `CF_PILOT_APP_URL`, and `CF_RUN_EXTERNAL_INTERACTIVE=1`; the runner creates a disposable annual user, opens Google consent, proves upload/checksum/restore/pre_restore, disconnects, and deletes the app user;
+- Whop E2E: `WHOP_API_KEY`, hosted Whop plan/webhook configuration, `CF_WHOP_SANDBOX_CONFIRMED=true`, and interactive mode; it proves checkout -> activation webhook -> immediate cancellation -> deactivation webhook;
+- Android: stable non-example `CAPACITOR_APP_ID`, signing variables, Android SDK, `adb`, a physical authorized device, and interactive mode;
+- legal/privacy: public HTTPS `CF_PRIVACY_URL` and `CF_TERMS_URL` plus explicit human attestation `CF_LEGAL_APPROVED=true`, reviewer and approval date.
+
+`pilot-cors-runtime-release.sh` updates hosted `APP_URL`, computes the transitive Edge Function closure that imports `_shared/http.ts`, requires exactly 26 functions for this release, deploys them, and verifies allow/deny preflights. The Google Drive E2E intentionally leaves its two audit backup files in the consenting account's hidden `appDataFolder`; database credentials and the disposable CapitalFlow user are removed.
