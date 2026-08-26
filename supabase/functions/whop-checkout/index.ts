@@ -1,6 +1,7 @@
 import { recordAuditEvent } from "../_shared/audit.ts";
 import { optionalEnv, requiredEnv } from "../_shared/env.ts";
 import { errorResponse, handleOptions, HttpError, json, readJson } from "../_shared/http.ts";
+import { enforceUserRateLimit, RATE_LIMIT_POLICIES } from "../_shared/rate-limit.ts";
 import { createServiceClient, requireUser } from "../_shared/supabase.ts";
 
 interface CheckoutInput { interval: "weekly" | "annual" }
@@ -12,6 +13,7 @@ Deno.serve(async (request) => {
     if (request.method !== "POST") throw new HttpError(405, "method_not_allowed");
     const { user } = await requireUser(request);
     const service = createServiceClient();
+    await enforceUserRateLimit(service, user.id, RATE_LIMIT_POLICIES.WHOP_CHECKOUT);
     // Checkout is the one paid endpoint that does not require an existing entitlement.
     const body = await readJson<CheckoutInput>(request, 10_000);
     if (body.interval !== "weekly" && body.interval !== "annual") throw new HttpError(422, "invalid_interval");
