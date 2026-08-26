@@ -1,24 +1,61 @@
-export const corsHeaders = {
-  "access-control-allow-origin": "*",
-  "access-control-allow-headers": "authorization, x-client-info, apikey, content-type, x-cron-secret",
-  "access-control-allow-methods": "GET, POST, OPTIONS",
-};
+import { optionalEnv, type EnvReader } from "./env.ts";
 
-export function handleOptions(request: Request): Response | null {
-  return request.method === "OPTIONS" ? new Response("ok", { headers: corsHeaders }) : null;
+const corsBaseHeaders = {
+  "access-control-allow-headers": "authorization, x-client-info, apikey, content-type, x-cron-secret, x-retry-count, traceparent, tracestate, baggage",
+  "access-control-allow-methods": "GET, POST, OPTIONS",
+  "vary": "Origin",
+} as const;
+
+export function allowedCorsOrigin(read?: EnvReader): string | null {
+  let appUrl: string | null;
+  try {
+    appUrl = optionalEnv("APP_URL", read);
+  } catch {
+    return null;
+  }
+  if (!appUrl) return null;
+
+  try {
+    const parsed = new URL(appUrl);
+    if (parsed.protocol !== "https:" && parsed.protocol !== "http:") return null;
+    if (parsed.username || parsed.password) return null;
+    return parsed.origin;
+  } catch {
+    return null;
+  }
+}
+
+export function corsHeaders(read?: EnvReader): Record<string, string> {
+  const allowedOrigin = allowedCorsOrigin(read);
+  return {
+    ...corsBaseHeaders,
+    ...(allowedOrigin ? { "access-control-allow-origin": allowedOrigin } : {}),
+  };
+}
+
+export function handleOptions(request: Request, read?: EnvReader): Response | null {
+  if (request.method !== "OPTIONS") return null;
+
+  const allowedOrigin = allowedCorsOrigin(read);
+  const requestOrigin = request.headers.get("origin");
+  if (!allowedOrigin || !requestOrigin || requestOrigin !== allowedOrigin) {
+    return new Response(null, { status: 403, headers: { "vary": "Origin" } });
+  }
+
+  return new Response(null, { status: 204, headers: corsHeaders(read) });
 }
 
 export function json(data: unknown, status = 200, extraHeaders: HeadersInit = {}): Response {
   return new Response(JSON.stringify(data), {
     status,
-    headers: { ...corsHeaders, "content-type": "application/json; charset=utf-8", ...extraHeaders },
+    headers: { ...corsHeaders(), "content-type": "application/json; charset=utf-8", ...extraHeaders },
   });
 }
 
 export function text(data: string, status = 200, extraHeaders: HeadersInit = {}): Response {
   return new Response(data, {
     status,
-    headers: { ...corsHeaders, "content-type": "text/plain; charset=utf-8", ...extraHeaders },
+    headers: { ...corsHeaders(), "content-type": "text/plain; charset=utf-8", ...extraHeaders },
   });
 }
 

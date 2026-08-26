@@ -444,3 +444,15 @@ Checklist E2E obligatorio:
 - [ ] `authenticated` no puede seleccionar `private.automation_metrics_30d`.
 
 Los workers existentes de correo y backup no cambian de frecuencia. `reprocessPendingCandidates` se ejecuta síncronamente después de aprendizaje/creación de cuenta con un límite de 50 pendientes recientes para acotar carga.
+
+## T13 release/pilot automation
+
+Before deploying the shared CORS boundary, set hosted `APP_URL` to the real HTTPS origin of the pilot web application. Do not use localhost in hosted Edge Functions. Any Edge Function importing `_shared/http.ts` must be redeployed after changing that shared boundary.
+
+The production PWA build generates `apps/web/public/_headers` from `apps/web/security-policy.ts`. A hosting platform must apply those headers (or equivalent nginx/CDN configuration); `npm run pilot:web` verifies the live origin, CSP, security headers, manifest and service worker cache policy.
+
+Operations can run `npm run pilot:health` with `SUPABASE_URL` and `CRON_SECRET` in the shell. The endpoint returns only aggregate health and returns `503` when stale jobs/leases make the runtime degraded.
+
+For Android release, keep signing material outside the repository and export `ANDROID_KEYSTORE_PATH`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS` and `ANDROID_KEY_PASSWORD`, then run `npm run android:release`. The helper creates, zipaligns, signs, verifies and hashes the release APK under `artifacts/`.
+
+`npm run pilot:readiness` is the next-stage operator gate. It reuses code tests, can optionally run local pgTAP, verifies a deployed PWA and operational health when credentials/URLs are supplied, verifies a signed APK when `PILOT_APK_PATH` is supplied, and reports the remaining real-provider/legal gates explicitly instead of inventing evidence.

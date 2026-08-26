@@ -78,3 +78,9 @@ El workflow de CI cubre la instalación, typecheck y build web. `docs/DEPLOYMENT
 ## Próximo gate recomendado
 
 Configurar un entorno sandbox completo, ejecutar el checklist de `docs/DEPLOYMENT.md`, probar con dos usuarios para verificar aislamiento RLS y realizar un piloto cerrado con APK firmado y fuentes de correo de prueba antes de procesar datos financieros reales.
+
+### T13 implementation closure
+
+Code-level T13 hardening includes fail-closed CORS, production CSP/security headers, a bounded/versioned PWA cache, operational health RPC/Edge endpoint, two-tenant RLS regression coverage, pilot PWA verification, signed-APK automation, and a consolidated pilot-readiness runner. Rate limiting, retention purge, export/delete and the private Data API gateway were released in prior T13 checkpoints.
+
+The code implementation can be closed independently from external pilot evidence. Real Google Drive OAuth/backup/restore, Whop sandbox purchase/webhook, two-real-user RLS confirmation, signed APK on a physical device, deployed PWA/domain headers, and legal/privacy review remain external gates and must not be marked GREEN from repository evidence alone.
