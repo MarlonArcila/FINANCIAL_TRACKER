@@ -289,11 +289,11 @@ Jobs sugeridos:
 | cada 5 min | procesar sync jobs pendientes |
 | cada 6 h | reintentar conexiones con error transitorio |
 | diario | renovar Gmail watches próximos a expirar |
-| diario | purgar candidatos/rechazados según retención |
+| diario | `capitalflow-retention-purge-daily`: purgar candidatos rechazados y evidencia dedupe según `private.retention_policy` |
 | diario | detectar membresías locales vencidas como defensa secundaria |
 | semanal | reporte de salud de integraciones |
 
-Los jobs usan un secreto interno y no un JWT de usuario.
+Los jobs que invocan Edge Functions usan un secreto interno y no un JWT de usuario. El purge de retención corre directamente en Postgres mediante Supabase Cron y reutiliza el mismo RPC backend; no cruza HTTP.
 
 ## 10. CI/CD
 

@@ -38,3 +38,6 @@ verify_jwt = false
 
 [functions.disconnect-source]
 verify_jwt = false
+
+[functions.purge-expired-data]
+verify_jwt = false
