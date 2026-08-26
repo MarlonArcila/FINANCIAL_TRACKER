@@ -1,5 +1,7 @@
 # Cambios — 13 de agosto de 2026
 
+> **Nota de vigencia (26-08-2026):** este archivo conserva decisiones históricas del corte 13-08-2026. Las referencias a proveedores que ya no pertenecen al producto describen una dirección superseded. El contrato vigente del piloto es Google-only: Gmail para correo y Google Drive `appDataFolder` para backup/restore.
+
 ## Producto
 
 - El plan semanal conserva la automatización completa; el plan anual desbloquea IA.

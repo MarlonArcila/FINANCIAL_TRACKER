@@ -8,7 +8,7 @@ Después de autenticación y suscripción, `OnboardingGate` mantiene al usuario 
 
 1. moneda base y monedas habilitadas;
 2. cuenta principal;
-3. al menos Gmail u Outlook;
+3. Gmail;
 4. permiso de notificaciones cuando se ejecuta el APK Android;
 5. calibración inicial de 3–5 señales financieras cuando existen ejemplos disponibles.
 
@@ -42,16 +42,16 @@ Una allow-list vacía activa descubrimiento local. `NotificationListenerService`
 
 La lista explícita de paquetes permanece como filtro avanzado opcional.
 
-## 4. Gmail y Outlook
+## 4. Gmail
 
-Al terminar OAuth, cada callback encola automáticamente una primera sincronización. El usuario no necesita volver y pulsar un botón técnico para iniciar el backfill. Después continúan los mecanismos incrementales existentes.
+Al terminar OAuth, el callback de Gmail encola automáticamente una primera sincronización. El usuario no necesita volver y pulsar un botón técnico para iniciar el backfill. Después continúan los mecanismos incrementales existentes.
 
 ## 5. Cuentas por plan
 
 ### Semanal
 
 - una única cuenta principal activa;
-- importación, automatización, Gmail/Outlook, Android, metas, inversiones y multi-moneda continúan disponibles;
+- importación, automatización, Gmail, Android, metas, inversiones y multi-moneda continúan disponibles;
 - no puede crear ni restaurar una segunda cuenta activa.
 
 ### Anual
@@ -117,7 +117,6 @@ El objetivo de intervención mínima guía parser, reglas, re-procesamiento, ded
 - `supabase/functions/transaction-confirm/index.ts`
 - `supabase/functions/whop-webhook/index.ts`
 - `supabase/functions/gmail-oauth-callback/index.ts`
-- `supabase/functions/outlook-oauth-callback/index.ts`
 - `native/android/src/main/java/com/capitalflow/notification/FinanceNotificationListenerService.java`
 
 ## 11. Verificación local de esta iteración

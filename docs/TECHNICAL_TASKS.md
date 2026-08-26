@@ -249,23 +249,9 @@ Cada tarea indica requisitos de PRD, archivos/componentes, tablas, endpoints/fun
 
 ---
 
-## T12 — Outlook/Microsoft 365
+## T12 — Proveedor alternativo de correo (retirado)
 
-**Requisitos:** FR-MAIL-002 a FR-MAIL-009.  
-**Archivos:** `outlook-oauth-start`, `outlook-oauth-callback`, `outlook-sync`, `outlook-webhook`, `_shared/outlook.ts`, `IntegrationsPage.tsx`.  
-**Tablas:** mismas de T11.  
-**Endpoints:** cuatro funciones Outlook y cron de renovación.  
-**Funciones:** `exchangeMicrosoftCode`, `refreshMicrosoftToken`, `createGraphSubscription`, `syncOutlookDelta`, `validateGraphWebhook`, `disconnectOutlook`.
-
-**Tareas concretas**
-
-- Registrar app Entra para cuentas personales/organizacionales según mercado.
-- Usar `Mail.Read` delegado y `offline_access`.
-- Guardar deltaLink opaco.
-- Validar `validationToken` y `clientState`.
-- Renovar subscription.
-
-**Terminado cuando:** delta devuelve solo cambios posteriores y webhook falso no dispara procesamiento.
+**Estado:** `SUPERSEDED / NOT_APPLICABLE`. El contrato vigente usa Gmail como único proveedor de correo. No crear endpoints, secretos, callbacks ni código para un segundo proveedor durante el piloto.
 
 ---
 
@@ -301,14 +287,14 @@ Cada tarea indica requisitos de PRD, archivos/componentes, tablas, endpoints/fun
 | FR-CAT-001..005 | T04/T05 | category UI, classifier | categories, rules |
 | FR-AND-001..009 | T07 | Java listener/plugin | notification-ingest |
 | FR-MAIL-001/003..009 | T11 | Gmail functions | OAuth creds, watch, candidates |
-| FR-MAIL-002/003..009 | T12 | Outlook functions | Graph delta/subscriptions |
+| FR-MAIL-002 | T12 | Retirado del contrato | N/A |
 | FR-CAN-001..008 | T05/T06 | parser, CandidateReview | source_events, candidates, RPC |
 | FR-GOA-001..005 | T08 | GoalsPage, compound | goals, contributions, view |
 | FR-INV-001..006 | T09 | InvestmentsPage, compound/risk | investments, valuations |
 | FR-ADV-001..011 | T10 | deterministic advisor, AI function | preferences, budget, runs |
 | FR-PWA-001..005 | T13 | manifest, sw, app shell | cache/offline/export |
-| NFR-SEC/PRI | T01/T03/T11/T12/T13 | RLS, crypto, webhooks, CI | private schema, audit |
-| NFR-PER/REL | T11/T12/T13 | incremental sync, jobs, metrics | cursors, retries, health |
+| NFR-SEC/PRI | T01/T03/T11/T13 | RLS, crypto, webhooks, CI | private schema, audit |
+| NFR-PER/REL | T11/T13 | incremental sync, jobs, metrics | cursors, retries, health |
 | NFR-ACC/MNT | T00/T02/T13 | design system, tests, docs | CI/OpenAPI |
 
 # Archivos que deben existir al finalizar
@@ -335,10 +321,6 @@ supabase/functions/
   gmail-oauth-callback/index.ts
   gmail-sync/index.ts
   gmail-pubsub-webhook/index.ts
-  outlook-oauth-start/index.ts
-  outlook-oauth-callback/index.ts
-  outlook-sync/index.ts
-  outlook-webhook/index.ts
   renew-mail-watches/index.ts
   ai-advisor/index.ts
   export-data/index.ts
@@ -398,7 +380,7 @@ native/android/src/main/java/com/capitalflow/notification/
 **Criterios técnicos**
 - `assertAnnualEntitled` en todas las acciones iniciadas por usuario.
 - OAuth de almacenamiento separado del correo.
-- Google `drive.appdata`; Microsoft `Files.ReadWrite.AppFolder`.
+- Google `drive.appdata`/`appDataFolder` como único proveedor de backup del contrato vigente.
 - Tokens cifrados con la misma capa AES-GCM del backend.
 - Backup JSON versionado, checksum SHA-256, sin secretos.
 - Frecuencia manual/diaria/semanal; semanal por defecto.
@@ -416,14 +398,14 @@ native/android/src/main/java/com/capitalflow/notification/
 - `apps/web/src/pages/OnboardingPage.tsx`: monedas, principal, correo, Android y 3–5 asociaciones.
 - `apps/web/src/lib/data.ts`: `loadOnboardingState`, `updateOnboardingState`, `completeOnboarding`.
 - `supabase/migrations/202608130004_onboarding_multi_accounts.sql`: `onboarding_state` + RLS.
-- `gmail-oauth-callback/index.ts` / `outlook-oauth-callback/index.ts`: encolar sync inicial.
+- `gmail-oauth-callback/index.ts`: encolar sync inicial.
 - `native/android/.../FinanceNotificationListenerService.java`: allow-list vacía = descubrimiento automático local.
 - `_shared/automation.ts`: `reprocessPendingCandidates`.
 - `transaction-confirm/index.ts`: aprender y re-procesar.
 
 **Criterios técnicos**
 - Persistir progreso server-side.
-- Al menos una fuente Gmail/Outlook activa.
+- Una conexión Gmail activa.
 - Android nativo exige permiso; PWA lo trata como no aplicable.
 - Intentar 3–5 asociaciones, sin bloqueo eterno si no hay señales.
 - No exponer porcentaje de autonomía al frontend.

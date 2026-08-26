@@ -11,12 +11,11 @@
 
 ## 1. Resumen ejecutivo
 
-CapitalFlow es una aplicación de finanzas personales que permite registrar y entender ingresos, gastos, metas de ahorro e inversiones sin conectarse a APIs bancarias ni a APIs de plataformas de pago. El producto captura datos mediante cuatro vías:
+CapitalFlow es una aplicación de finanzas personales que permite registrar y entender ingresos, gastos, metas de ahorro e inversiones sin conectarse a APIs bancarias ni a APIs de plataformas de pago. El producto captura datos mediante tres vías:
 
 1. ingreso manual;
 2. notificaciones de aplicaciones Android autorizadas por el usuario;
-3. correos de Gmail vinculados por OAuth;
-4. correos de Outlook/Microsoft 365 vinculados por OAuth.
+3. correos de Gmail vinculados por OAuth.
 
 Los eventos detectados se convierten en señales financieras normalizadas. Las señales inequívocas se deduplican, asignan y contabilizan automáticamente; solo las excepciones ambiguas pasan a revisión. Cada corrección puede crear reglas privadas fuente→cuenta y comercio→categoría, y el backend vuelve a evaluar excepciones pendientes para reducir progresivamente la necesidad de intervención.
 
@@ -128,7 +127,7 @@ Ayudar al usuario a consolidar, clasificar y administrar su flujo de dinero con 
 - Ingresos, gastos y transferencias manuales.
 - Categorías del sistema y categorías personalizadas.
 - Captura Android con filtrado financiero local; por defecto puede descubrir señales en las notificaciones autorizadas por Android y permite una allowlist avanzada opcional.
-- Vinculación Gmail y Outlook mediante OAuth.
+- Vinculación Gmail mediante OAuth.
 - Sincronización inicial e incremental de correos.
 - Bandeja de excepciones para señales que no pudieron resolverse con seguridad: aceptar, corregir, categorizar, rechazar y marcar duplicado.
 - Reglas simples de categorización aprendidas de correcciones del usuario.
@@ -179,7 +178,7 @@ Ayudar al usuario a consolidar, clasificar y administrar su flujo de dinero con 
 
 ### 7.2 Correo sin APIs bancarias
 
-- Gmail se integra con Gmail API mediante OAuth; Outlook con Microsoft Graph mediante OAuth.
+- Gmail se integra con Gmail API mediante OAuth.
 - La app solicita el permiso mínimo que permita leer los mensajes necesarios.
 - Los tokens se guardan cifrados y solo en backend.
 - La producción pública de Gmail debe contemplar el proceso de verificación de permisos restringidos y la evaluación de seguridad aplicable.
@@ -230,14 +229,14 @@ Ayudar al usuario a consolidar, clasificar y administrar su flujo de dinero con 
 9. El backend deduplica, resuelve cuenta/categoría y aplica la política determinista: contabiliza una señal inequívoca o crea una `transaction_candidate` solo si es una excepción.
 10. El usuario acepta, corrige o rechaza únicamente las excepciones; una corrección puede enseñar reglas y re-evaluar pendientes recientes.
 
-### 8.4 Detección desde Gmail/Outlook
+### 8.4 Detección desde Gmail
 
 1. Usuario pulsa “Conectar”.
 2. Backend genera URL OAuth con estado firmado.
 3. Usuario concede permisos al proveedor.
 4. Callback valida estado, intercambia código y cifra tokens.
 5. Se realiza sincronización inicial limitada.
-6. Se registra mecanismo incremental: Gmail watch/Pub/Sub o Microsoft Graph subscription/delta.
+6. Se registra mecanismo incremental: Gmail watch/Pub/Sub.
 7. Los mensajes relevantes se deduplican y pasan por la política determinista de automatización.
 8. Las señales inequívocas se contabilizan; solo las ambiguas o inseguras llegan a revisión para confirmar, corregir o rechazar.
 
@@ -337,16 +336,15 @@ Ayudar al usuario a consolidar, clasificar y administrar su flujo de dinero con 
 | FR-AND-008 | Procesar notificaciones localmente y no enviar al backend contenido que no supere el filtro financiero; si existe allowlist, limitarse a ella. | P0 |
 | FR-AND-009 | Mostrar claramente que la función no está disponible en PWA web. | P0 |
 
-### Gmail y Outlook
+### Gmail
 
 | ID | Requisito | Prioridad |
 |---|---|---|
 | FR-MAIL-001 | Conectar y desconectar Gmail mediante OAuth. | P0 |
-| FR-MAIL-002 | Conectar y desconectar Outlook/Microsoft 365 mediante OAuth. | P0 |
 | FR-MAIL-003 | Guardar tokens cifrados y refrescarlos en backend. | P0 |
 | FR-MAIL-004 | Realizar sincronización inicial con límite temporal y paginación. | P0 |
 | FR-MAIL-005 | Procesar cambios incrementales sin releer todo el buzón. | P0 |
-| FR-MAIL-006 | Renovar watches/subscriptions antes de expirar. | P0 |
+| FR-MAIL-006 | Renovar el Gmail watch antes de expirar. | P0 |
 | FR-MAIL-007 | Generar señales solo para mensajes con evidencia financiera suficiente y aplicar la política de automatización por excepción. | P0 |
 | FR-MAIL-008 | No conservar cuerpos completos por defecto. | P0 |
 | FR-MAIL-009 | Permitir sincronización manual y mostrar último estado/error. | P0 |
@@ -617,7 +615,7 @@ El usuario puede modificar prioridades, pero el sistema debe advertir cuando se 
 - NFR-SEC-003: tokens OAuth cifrados con AES-256-GCM o servicio de secretos equivalente.
 - NFR-SEC-004: claves de servicio solo en backend.
 - NFR-SEC-005: RLS habilitado en toda tabla expuesta.
-- NFR-SEC-006: verificación de firma de Whop y validación de Microsoft/Google webhooks.
+- NFR-SEC-006: verificación de firma de Whop y validación de callbacks/webhooks de Google.
 - NFR-SEC-007: idempotencia en webhooks, candidatos, checkout y aceptación.
 - NFR-SEC-008: rate limiting en OAuth, sincronización, IA y checkout.
 - NFR-SEC-009: sanitización de logs; no registrar tokens ni cuerpos completos.
@@ -625,7 +623,7 @@ El usuario puede modificar prioridades, pero el sistema debe advertir cuando se 
 
 ### Privacidad
 
-- NFR-PRI-001: consentimiento separado para Android, Gmail, Outlook e IA.
+- NFR-PRI-001: consentimiento separado para Android, Gmail, Google Drive e IA.
 - NFR-PRI-002: minimización y retención configurable.
 - NFR-PRI-003: contenido bruto no se almacena salvo necesidad técnica documentada.
 - NFR-PRI-004: eliminación de conexiones borra credenciales inmediatamente.
@@ -678,7 +676,7 @@ El usuario puede modificar prioridades, pero el sistema debe advertir cuando se 
 | `categories` | Categorías del sistema y usuario | `user_id`, `kind`, `name`, `is_system` |
 | `transactions` | Libro de movimientos confirmados | `kind`, `amount_minor`, `currency`, `account_id`, `source` |
 | `transaction_revisions` | Historial de cambios/anulaciones | `transaction_id`, `before_data`, `after_data` |
-| `source_connections` | Estado de Gmail/Outlook/Android | `provider`, `status`, `email`, `cursor`, `watch_expiration` |
+| `source_connections` | Estado de Gmail/Android | `provider`, `status`, `email`, `cursor`, `watch_expiration` |
 | `private.oauth_credentials` | Tokens cifrados no expuestos | `connection_id`, `access_token_ciphertext`, `refresh_token_ciphertext` |
 | `source_events` | Evidencia mínima y deduplicación | `provider`, `external_id`, `fingerprint`, `sanitized_text` |
 | `transaction_candidates` | Movimientos detectados pendientes | `proposed_kind`, `amount_minor`, `confidence`, `status` |
@@ -729,9 +727,9 @@ El usuario puede modificar prioridades, pero el sistema debe advertir cuando se 
    - Esquema `private` para tokens, webhooks y auditoría.
 
 4. **Edge Functions**
-   - OAuth Gmail/Outlook.
+   - OAuth Gmail.
    - Sincronización y renovación.
-   - Webhooks Whop/Microsoft/Google.
+   - Webhooks Whop/Google.
    - Ingesta Android.
    - Checkout y asesor IA.
 
@@ -741,10 +739,7 @@ El usuario puede modificar prioridades, pero el sistema debe advertir cuando se 
 6. **Google Cloud**
    - OAuth, Gmail API y Pub/Sub para watch.
 
-7. **Microsoft Entra/Graph**
-   - OAuth, mensajes delta y subscriptions.
-
-8. **Gateway de IA opcional**
+7. **Gateway de IA opcional**
    - Adaptador reemplazable; nunca recibe datos crudos.
 
 ### 14.2 Diagrama
@@ -761,7 +756,6 @@ flowchart LR
   EF --> DB
   EF --> WHOP[Whop]
   EF --> GMAIL[Gmail API / PubSub]
-  EF --> GRAPH[Microsoft Graph]
   EF --> AI[Gateway IA opcional]
 ```
 
@@ -787,11 +781,7 @@ flowchart LR
 | GET | `/functions/v1/gmail-oauth-callback` | Estado firmado | Guardar conexión Gmail |
 | POST | `/functions/v1/gmail-sync` | Usuario/servicio | Sincronizar buzón |
 | POST | `/functions/v1/gmail-pubsub-webhook` | Pub/Sub validado | Disparar sync incremental |
-| POST | `/functions/v1/outlook-oauth-start` | Usuario | Crear URL OAuth Microsoft |
-| GET | `/functions/v1/outlook-oauth-callback` | Estado firmado | Guardar conexión Outlook |
-| POST | `/functions/v1/outlook-sync` | Usuario/servicio | Ejecutar delta sync |
-| POST/GET | `/functions/v1/outlook-webhook` | Validation token/clientState | Recibir cambios Graph |
-| POST | `/functions/v1/renew-mail-watches` | Cron secreto | Renovar Gmail/Outlook |
+| POST | `/functions/v1/renew-mail-watches` | Cron secreto | Renovar Gmail |
 | POST | `/functions/v1/ai-advisor` | Usuario activo | Explicar resultado determinista |
 | POST | `/functions/v1/export-data` | Usuario | Generar exportación |
 | DELETE | `/functions/v1/delete-account` | Usuario reforzado | Eliminar cuenta y conexiones |
@@ -937,11 +927,11 @@ No enviar importe exacto, comercio, asunto, texto de correo, paquete o identific
 - Ingesta, deduplicación, auto-contabilización y revisión por excepción.
 - APK firmado para testers.
 
-### Fase 4 — Gmail y Outlook
+### Fase 4 — Gmail
 
 - OAuth y tokens cifrados.
 - Sync inicial/incremental.
-- Watches/subscriptions y renovación.
+- Watch/Pub/Sub y renovación.
 - Reglas de privacidad y desconexión.
 
 ### Fase 5 — IA, hardening y piloto
@@ -973,7 +963,7 @@ No enviar importe exacto, comercio, asunto, texto de correo, paquete o identific
 - aceptación atómica de candidata.
 - OAuth state y cifrado/descifrado.
 - webhooks Whop firmados y repetidos.
-- Gmail/Outlook con respuestas simuladas.
+- Gmail con respuestas simuladas.
 - renovación de suscripciones de correo.
 
 ### E2E
@@ -1043,7 +1033,7 @@ Estas decisiones no bloquean el scaffold, pero deben definirse antes de producci
 
 El MVP adopta un modelo de **automatización por confianza**: las detecciones inequívocas se contabilizan automáticamente; duplicados/ruido se silencian; y únicamente las excepciones ambiguas pasan a revisión. Las correcciones pueden generar reglas privadas por usuario para resolver automáticamente la cuenta y categoría la próxima vez. El objetivo interno posterior al onboarding es una tasa de intervención de 5 % o menos, idealmente tendiendo a 0 %. Esta telemetría es exclusivamente de ingeniería/QA: no se muestra en el dashboard ni en ninguna pantalla del usuario.
 
-El plan semanal mantiene la automatización central, Gmail/Outlook, Android, registro manual, metas, inversiones, multi-moneda y asesor determinista. El plan anual incluye todo lo anterior y desbloquea la capa de IA: explicaciones personalizadas, escenarios conversacionales, lectura de patrones y ayuda educativa sobre riesgo/horizonte. El backend exige una membresía anual activa para `ai-advisor`.
+El plan semanal mantiene la automatización central, Gmail, Android, registro manual, metas, inversiones, multi-moneda y asesor determinista. El plan anual incluye todo lo anterior y desbloquea la capa de IA: explicaciones personalizadas, escenarios conversacionales, lectura de patrones y ayuda educativa sobre riesgo/horizonte. El backend exige una membresía anual activa para `ai-advisor`.
 
 El perfil puede definir una moneda base y varias monedas habilitadas. Los valores se conservan en su moneda nativa; cualquier consolidación primero agrupa por moneda y luego usa `fx-rate`. La interfaz muestra fuente, fecha y advertencia de la tasa. La implementación de referencia incluye un adaptador experimental a la cotización pública visible de Google Finance y una alternativa configurable.
 
@@ -1069,7 +1059,6 @@ El **backup/restore conectado a almacenamiento en nube** es una función premium
 | Deduplicación de reimportaciones | Sí | Sí |
 | Preservar/crear categorías importadas | Sí | Sí |
 | Google Drive backup/restore | No | Sí |
-| OneDrive backup/restore | No | Sí |
 | Backup manual | No | Sí |
 | Backup automático diario/semanal | No | Sí |
 | Copia automática antes de restore | No | Sí |
@@ -1108,9 +1097,9 @@ El **backup/restore conectado a almacenamiento en nube** es una función premium
 
 **FR-BKP-001.** Solo una suscripción anual activa puede conectar almacenamiento para backup/restore.
 
-**FR-BKP-002.** Google Drive se conecta mediante OAuth con `drive.appdata` y guarda los archivos en `appDataFolder`. OneDrive se conecta mediante OAuth con `Files.ReadWrite.AppFolder` y usa la carpeta de aplicación del usuario.
+**FR-BKP-002.** Google Drive se conecta mediante OAuth con `drive.appdata` y guarda los archivos en `appDataFolder`.
 
-**FR-BKP-003.** La conexión de almacenamiento es independiente de Gmail/Outlook. No se reutilizan tokens de lectura de correo para acceder a Drive/OneDrive.
+**FR-BKP-003.** La conexión de almacenamiento es independiente de Gmail. No se reutilizan tokens de lectura de correo para acceder a Google Drive.
 
 **FR-BKP-004.** Un backup contiene perfil financiero, cuentas, categorías, movimientos, metas y aportes, inversiones y valoraciones, reglas aprendidas, presupuestos y preferencias financieras. No incluye suscripción Whop, tokens OAuth, secretos, webhooks, cuerpos de correo, eventos crudos ni texto generado por IA.
 
@@ -1135,7 +1124,7 @@ El **backup/restore conectado a almacenamiento en nube** es una función premium
 **Como** suscriptor anual, **quiero** conectar mi almacenamiento y definir una frecuencia, **para** conservar copias de mis finanzas sin acordarme de exportarlas.
 
 **Aceptación:**
-1. Puedo conectar Google Drive u OneDrive desde Datos.
+1. Puedo conectar Google Drive desde Datos.
 2. Una cuenta semanal recibe `annual_subscription_required` si intenta invocar el endpoint directamente.
 3. La frecuencia inicial es semanal y puedo cambiarla a diaria o manual.
 4. Un backup exitoso aparece con fecha, proveedor y tamaño.
@@ -1164,7 +1153,7 @@ CapitalFlow debe diseñarse para que el usuario intervenga solo ante excepciones
 Mecanismos obligatorios para acercarse progresivamente a intervención cero:
 
 - auto-contabilización por confianza cuando cuenta y categoría se resuelven sin conflicto;
-- deduplicación entre Android, Gmail y Outlook;
+- deduplicación entre Android y Gmail;
 - aprendizaje fuente→cuenta y comercio→categoría a partir de correcciones;
 - re-evaluación automática de pendientes después de aprender una regla o crear la cuenta que faltaba;
 - fallback controlado a categoría `Otros` cuando sea seguro y esté habilitado;
@@ -1176,9 +1165,9 @@ Mecanismos obligatorios para acercarse progresivamente a intervención cero:
 
 **FR-ONB-001.** Tras activar una suscripción, el usuario entra a un onboarding persistente antes del dashboard normal.
 
-**FR-ONB-002.** El onboarding configura moneda base y monedas habilitadas, crea la cuenta principal, conecta al menos Gmail u Outlook, solicita acceso a notificaciones cuando se ejecuta el APK Android y calibra entre 3 y 5 ejemplos cuando existen señales recientes.
+**FR-ONB-002.** El onboarding configura moneda base y monedas habilitadas, crea la cuenta principal, conecta Gmail, solicita acceso a notificaciones cuando se ejecuta el APK Android y calibra entre 3 y 5 ejemplos cuando existen señales recientes.
 
-**FR-ONB-003.** Gmail/Outlook encolan automáticamente una sincronización inicial al finalizar OAuth.
+**FR-ONB-003.** Gmail encola automáticamente una sincronización inicial al finalizar OAuth.
 
 **FR-ONB-004.** En Android, una allowlist vacía significa descubrimiento automático local: el parser descarta ruido/OTP/promociones y solo pone en cola señales financieras. La allowlist queda como control avanzado opcional.
 
@@ -1194,7 +1183,7 @@ Mecanismos obligatorios para acercarse progresivamente a intervención cero:
 
 **Aceptación:**
 1. El progreso sobrevive a OAuth/reinicio.
-2. Puedo conectar Gmail u Outlook desde el onboarding.
+2. Puedo conectar Gmail desde el onboarding.
 3. El APK solicita el permiso Android sin pedirme package names.
 4. Puedo confirmar ejemplos reales y el sistema recuerda la asociación.
 5. Una regla recién aprendida puede resolver automáticamente otros pendientes compatibles.

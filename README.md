@@ -6,7 +6,7 @@ CapitalFlow is a paid personal-finance tracker delivered as:
 - an Android APK built with Capacitor for native notification access;
 - a Supabase backend for authentication, PostgreSQL, Row Level Security, OAuth integrations, webhooks, and server functions.
 
-The reference implementation supports a persistent automation-first onboarding, manual and automated transactions, portable imports from CSV/TSV/Excel/JSON, custom categories, goals and investments, deterministic allocation guidance, an optional annual AI explanation layer, Android notification ingestion, Gmail/Outlook ingestion, multi-currency reporting, Whop weekly/annual subscriptions, one primary tracking account on weekly, annual-only independent trip/work/project accounts, and annual-only cloud backup/restore through Google Drive or OneDrive.
+The reference implementation supports a persistent automation-first onboarding, manual and automated transactions, portable imports from CSV/TSV/Excel/JSON, custom categories, goals and investments, deterministic allocation guidance, an optional annual AI explanation layer, Android notification ingestion, Gmail ingestion, multi-currency reporting, Whop weekly/annual subscriptions, one primary tracking account on weekly, annual-only independent trip/work/project accounts, and annual-only cloud backup/restore through Google Drive.
 
 ## Important platform constraint
 
@@ -53,7 +53,7 @@ Generate a signed APK in Android Studio or use the Capacitor build command descr
 
 ## Scope note
 
-This repository is a production-oriented MVP starter. External credentials, provider registrations, legal/privacy review, Gmail restricted-scope verification, Google Drive app-data consent, Microsoft Graph app-folder permissions, Whop product configuration, and Android signing keys must be supplied by the product owner before production launch.
+This repository is a production-oriented MVP starter. External credentials, provider registrations, legal/privacy review, Gmail restricted-scope verification, Google Drive app-data consent, Whop product configuration, and Android signing keys must be supplied by the product owner before production launch.
 
 The repository includes GitHub Actions for dependency installation, all tests, strict workspace type checking, and a production PWA build. The generated Android project is intentionally not committed; Capacitor creates it from the web build and the checked-in native module.
 

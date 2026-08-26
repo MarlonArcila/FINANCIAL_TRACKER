@@ -15,7 +15,7 @@ Reglas obligatorias:
 - La versión web es PWA. La lectura de notificaciones requiere un APK Capacitor con NotificationListenerService Java.
 - Usa Supabase Auth/PostgreSQL/RLS como referencia, salvo que la plataforma obligue a otro backend; conserva el contrato OpenAPI y las mismas entidades.
 - Whop es la fuente de verdad de suscripciones semanal/anual. La API key y verificación de webhooks están solo en servidor.
-- Gmail y Outlook usan OAuth; cifra refresh/access tokens y no almacenes cuerpos completos por defecto.
+- Gmail usa OAuth; cifra refresh/access tokens y no almacenes cuerpos completos por defecto.
 - El asesor sin IA debe funcionar siempre. La IA solo explica un resultado determinista y no puede cambiar cifras.
 - Nunca envíes correos, notificaciones crudas, tokens, números de tarjeta ni identificadores sensibles a IA o analítica.
 - Implementa pruebas, RLS, idempotencia y criterios de aceptación antes de marcar una tarea como terminada.
@@ -117,7 +117,7 @@ La salida no es aceptable si:
 - No confíes en montos/fechas solo porque vienen del navegador: `import-transactions` debe revalidarlos.
 - No crees cuentas automáticamente a partir de nombres desconocidos; usa una cuenta predeterminada ya creada.
 - No elimines la deduplicación `import_key`.
-- No uses scopes amplios de Drive/OneDrive si existen `drive.appdata` / `Files.ReadWrite.AppFolder`.
+- Para Google Drive usa únicamente `drive.appdata`/`appDataFolder`; no solicites acceso general a My Drive.
 - Nunca incluyas suscripción, OAuth tokens, secretos o correo crudo en `capitalflow-backup-v2`.
 - Nunca restaures antes de: checksum válido → backup `pre_restore` → confirmación `RESTAURAR`.
 - Un tercer proveedor (Dropbox/WebDAV/S3-compatible) debe añadirse detrás del adaptador de almacenamiento, sin cambiar el formato financiero del backup.

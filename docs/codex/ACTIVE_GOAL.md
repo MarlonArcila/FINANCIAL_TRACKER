@@ -151,7 +151,7 @@ Operator evidence: DB_RESET=PASS, PGTAP=PASS, PGTAP_FILES=4, PGTAP_TESTS=109.
 
 The local concurrency gate is prepared but was not executed by Codex. It uses two independent local PostgreSQL client processes for mail, watch, and backup claims, validates known resource identities, rejects non-local database hosts, sanitizes output, and cleans fixtures best-effort in finally blocks.
 
-Manual versus worker exclusion is covered by a local static boundary check and deterministic mock race using the shared claim mechanism. Google Drive appDataFolder reconciliation and OneDrive deterministic backup paths are covered by local fetch-mock tests.
+Manual versus worker exclusion is covered by a local static boundary check and deterministic mock race using the shared claim mechanism. Google Drive `appDataFolder` reconciliation is covered by local fetch-mock tests; no second cloud-storage provider belongs to the current pilot contract.
 
 Status: WAITING_FOR_OPERATOR_CONCURRENCY.
 

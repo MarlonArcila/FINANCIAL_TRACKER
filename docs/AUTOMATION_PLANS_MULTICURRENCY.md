@@ -10,7 +10,7 @@ El plan semanal debe funcionar como una prueba pagada de la propuesta de valor, 
 | --- | --- | --- |
 | PWA + APK Android | Sí | Sí |
 | Captura automática de notificaciones autorizadas | Sí | Sí |
-| Gmail + Outlook | Sí | Sí |
+| Gmail | Sí | Sí |
 | Auto-contabilización por confianza | Sí | Sí |
 | Aprendizaje de cuenta/categoría tras correcciones | Sí | Sí |
 | Registro manual | Sí | Sí |
@@ -32,7 +32,7 @@ La UI marca el anual como `RECOMENDADO · EXPERIENCIA COMPLETA`. La autorizació
 - Mostrar el anual primero o con mayor jerarquía visual, más el equivalente mensual y el ahorro frente a 52 renovaciones semanales.
 - Como hipótesis inicial de pricing, probar que el anual cueste aproximadamente **28–32 pagos semanales** (aprox. 38–46 % menos que mantener el semanal durante 52 semanas). Ajustarlo con conversión, churn, CAC y disposición a pagar del piloto.
 - CTA semanal: `Probar 1 semana`. CTA anual: `Activar año + IA`.
-- No limitar número de movimientos, Gmail/Outlook ni automatización en semanal: son la prueba de valor que debe convencer al usuario de quedarse.
+- No limitar número de movimientos, Gmail ni automatización en semanal: son la prueba de valor que debe convencer al usuario de quedarse.
 
 ## 2. Principio de automatización
 
@@ -40,7 +40,7 @@ El objetivo operativo interno es que, después del onboarding y aprendizaje inic
 
 ### Automatización de una detección
 
-1. Android, Gmail u Outlook producen un evento sanitizado.
+1. Android o Gmail producen un evento sanitizado.
 2. El parser extrae dirección, monto, moneda, comercio, fecha y confianza.
 3. Ruido, OTP y detecciones con confianza extremadamente baja se descartan automáticamente.
 4. La huella idempotente evita contabilizar duplicados.
@@ -53,7 +53,7 @@ El objetivo operativo interno es que, después del onboarding y aprendizaje inic
 
 ### Revisión humana necesaria o prudente
 
-- Consentimiento inicial de Android, Gmail y Outlook.
+- Consentimiento inicial de Android y Gmail.
 - Checkout y gestión de la suscripción.
 - Creación/configuración inicial de cuentas y monedas.
 - Primera asignación cuando una fuente puede corresponder a varias cuentas de la misma moneda.
@@ -122,7 +122,7 @@ Estos datos sirven para ajustar parsers, reglas, deduplicación y umbrales. **No
 
 ### Aprendizaje progresivo
 
-Después de aceptar una excepción, CapitalFlow aprende reglas privadas fuente→cuenta y comercio→categoría y reevalúa automáticamente pendientes recientes. Crear una nueva cuenta también dispara esa reevaluación. Gmail/Outlook realizan la primera sincronización al finalizar OAuth y Android puede descubrir señales financieras localmente con allow-list vacía.
+Después de aceptar una excepción, CapitalFlow aprende reglas privadas fuente→cuenta y comercio→categoría y reevalúa automáticamente pendientes recientes. Crear una nueva cuenta también dispara esa reevaluación. Gmail realiza la primera sincronización al finalizar OAuth y Android puede descubrir señales financieras localmente con allow-list vacía.
 
 ## 7. Archivos principales
 
@@ -144,7 +144,7 @@ Después de aceptar una excepción, CapitalFlow aprende reglas privadas fuente�
 
 ## 8. Onboarding y cuentas por plan
 
-El onboarding persistente configura moneda(s), cuenta principal, al menos Gmail u Outlook, permiso Android cuando corresponda y 3–5 asociaciones reales cuando existan señales. Si no hay suficientes ejemplos, no bloquea indefinidamente el acceso: sigue aprendiendo con futuras excepciones.
+El onboarding persistente configura moneda(s), cuenta principal, Gmail, permiso Android cuando corresponda y 3–5 asociaciones reales cuando existan señales. Si no hay suficientes ejemplos, no bloquea indefinidamente el acceso: sigue aprendiendo con futuras excepciones.
 
 | Capacidad de cuentas | Semanal | Anual |
 | --- | --- | --- |

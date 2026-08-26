@@ -19,7 +19,6 @@ No reutilice secretos, bases de datos, OAuth clients ni webhooks entre staging y
 - Supabase CLI.
 - Android Studio y JDK compatible con la versión de Capacitor.
 - Cuenta/proyecto de Google Cloud para Gmail.
-- Registro de aplicación Microsoft Entra.
 - Cuenta Whop con empresa, producto y dos planes.
 - Dominio HTTPS controlado por el producto.
 
@@ -73,11 +72,6 @@ supabase secrets set \
   GMAIL_PUBSUB_TOPIC=... \
   GMAIL_PUBSUB_AUDIENCE=https://YOUR_PROJECT.supabase.co/functions/v1/gmail-pubsub-webhook \
   GMAIL_PUBSUB_SERVICE_ACCOUNT_EMAIL=... \
-  MICROSOFT_CLIENT_ID=... \
-  MICROSOFT_CLIENT_SECRET=... \
-  MICROSOFT_REDIRECT_URI=... \
-  OUTLOOK_WEBHOOK_URL=... \
-  OUTLOOK_CLIENT_STATE=... \
   WHOP_API_KEY=... \
   WHOP_WEBHOOK_SECRET=... \
   WHOP_COMPANY_ID=... \
@@ -92,7 +86,7 @@ Genere la clave AES con 32 bytes aleatorios:
 openssl rand -base64 32
 ```
 
-Genere secretos de estado/clientState con alta entropía:
+Genere secretos de estado OAuth con alta entropía:
 
 ```bash
 openssl rand -hex 32
@@ -109,17 +103,13 @@ supabase functions deploy gmail-oauth-start
 supabase functions deploy gmail-oauth-callback --no-verify-jwt
 supabase functions deploy gmail-sync
 supabase functions deploy gmail-pubsub-webhook --no-verify-jwt
-supabase functions deploy outlook-oauth-start
-supabase functions deploy outlook-oauth-callback --no-verify-jwt
-supabase functions deploy outlook-sync
-supabase functions deploy outlook-webhook --no-verify-jwt
 supabase functions deploy renew-mail-watches --no-verify-jwt
 supabase functions deploy ai-advisor
 supabase functions deploy export-data
 supabase functions deploy delete-account
 ```
 
-Las funciones públicas con `--no-verify-jwt` deben validar firma, estado, audiencia, `clientState` o secreto propio dentro del handler.
+Las funciones públicas con `--no-verify-jwt` deben validar firma, estado, audiencia o secreto propio dentro del handler.
 
 ## 5. Whop
 
@@ -193,22 +183,9 @@ Antes de abrir a usuarios generales:
 - evaluación de seguridad aplicable si datos restringidos pasan por servidor;
 - proceso de revocación y eliminación probado.
 
-## 7. Outlook/Microsoft 365
+## 7. Web/PWA
 
-- Registre aplicación en Microsoft Entra.
-- Seleccione tipos de cuenta adecuados: personales, organizacionales o ambos.
-- Configure redirect URI web exacta.
-- Solicite permisos delegados `openid profile email offline_access Mail.Read`.
-- Guarde client secret solo en backend.
-- Configure webhook HTTPS público.
-- Valide el `validationToken` dentro del tiempo requerido.
-- Use `clientState` secreto y compárelo en cada notificación.
-- Cree subscription para Inbox y renueve antes de expirar.
-- Use `@odata.deltaLink` sin modificarlo.
-
-## 8. Web/PWA
-
-### 8.1 Build
+### 7.1 Build
 
 ```bash
 npm run build
@@ -216,7 +193,7 @@ npm run build
 
 El resultado se encuentra en `apps/web/dist`.
 
-### 8.2 Hosting
+### 7.2 Hosting
 
 Puede desplegarse en Vercel, Netlify, Cloudflare Pages, Supabase Hosting compatible o servidor estático. Requisitos:
 
@@ -238,9 +215,9 @@ Permissions-Policy: camera=(), microphone=(), geolocation=()
 
 Ajuste CSP según checkout embebido o redirección seleccionada.
 
-## 9. Android sin Play Store durante pruebas
+## 8. Android sin Play Store durante pruebas
 
-### 9.1 Crear proyecto Capacitor
+### 8.1 Crear proyecto Capacitor
 
 ```bash
 npm run build
@@ -250,7 +227,7 @@ npm exec -w @capitalflow/web cap sync android
 npm exec -w @capitalflow/web cap open android
 ```
 
-### 9.2 Manifest y plugin
+### 8.2 Manifest y plugin
 
 El script copia:
 
@@ -260,7 +237,7 @@ El script copia:
 
 Revise manualmente el package name y cambie `com.capitalflow.app` por el identificador definitivo antes de firmar.
 
-### 9.3 APK debug para equipo técnico
+### 8.3 APK debug para equipo técnico
 
 Desde Android Studio use Build APK o:
 
@@ -270,7 +247,7 @@ cd apps/web/android
 adb install -r app/build/outputs/apk/debug/app-debug.apk
 ```
 
-### 9.4 APK release firmado
+### 8.4 APK release firmado
 
 Genere un keystore y guárdelo fuera del repositorio:
 
@@ -291,7 +268,7 @@ Configure signing en Gradle/Android Studio y construya:
 
 Distribuya el APK firmado mediante un sitio HTTPS privado o canal controlado. Los testers deben autorizar la fuente de instalación. Conserve la misma clave para todas las actualizaciones; cambiarla impide actualizar sobre la instalación existente.
 
-### 9.5 Pruebas obligatorias en dispositivo real
+### 8.5 Pruebas obligatorias en dispositivo real
 
 - permiso denegado/concedido/revocado;
 - selección de paquetes;
@@ -303,7 +280,7 @@ Distribuya el APK firmado mediante un sitio HTTPS privado o canal controlado. Lo
 - actualización APK sobre versión previa;
 - diferentes locales y formatos de moneda.
 
-## 10. Cron y mantenimiento
+## 9. Cron y mantenimiento
 
 Jobs sugeridos:
 
@@ -312,14 +289,13 @@ Jobs sugeridos:
 | cada 5 min | procesar sync jobs pendientes |
 | cada 6 h | reintentar conexiones con error transitorio |
 | diario | renovar Gmail watches próximos a expirar |
-| cada 12 h | renovar Outlook subscriptions |
 | diario | purgar candidatos/rechazados según retención |
 | diario | detectar membresías locales vencidas como defensa secundaria |
 | semanal | reporte de salud de integraciones |
 
 Los jobs usan un secreto interno y no un JWT de usuario.
 
-## 11. CI/CD
+## 10. CI/CD
 
 Pipeline mínimo:
 
@@ -344,7 +320,7 @@ Para Android:
 - hash SHA-256 del APK publicado;
 - canal de distribución controlado.
 
-## 12. Rollback
+## 11. Rollback
 
 - Web: conservar los dos builds anteriores y activar despliegue previo.
 - DB: migraciones forward-only; corrección mediante nueva migración.
@@ -353,7 +329,7 @@ Para Android:
 - Parser: versionar reglas y poder desactivar una regla desde configuración.
 - OAuth: poder revocar una conexión afectada sin borrar el usuario.
 
-## 13. Checklist de producción
+## 12. Checklist de producción
 
 - [ ] RLS verificada con pruebas cruzadas.
 - [ ] Whop production y webhooks firmados.
@@ -361,14 +337,13 @@ Para Android:
 - [ ] secrets rotados después del piloto.
 - [ ] OAuth production separado de testing.
 - [ ] Gmail verification/assessment resuelto según alcance.
-- [ ] Microsoft publisher/domain verification según público.
 - [ ] privacidad, términos y advertencias publicados.
 - [ ] exportación/eliminación probadas.
 - [ ] CSP y headers revisados.
 - [ ] alertas y copias de seguridad activas.
 - [ ] APK firmado, hash publicado y update probado.
 
-## 14. Importación de Excel/CSV
+## 13. Importación de Excel/CSV
 
 El frontend usa la dependencia `xlsx` únicamente para decodificar `.xlsx/.xls`; CSV/TSV/JSON se procesan con `@capitalflow/core`.
 
@@ -387,11 +362,11 @@ Pruebas mínimas antes de piloto:
 - segunda importación del mismo archivo: debe devolver duplicados, no duplicar libro;
 - archivo con filas inválidas: las válidas deben continuar.
 
-## 15. Google Drive y OneDrive para backup anual
+## 14. Google Drive para backup anual
 
-### 15.1 Callback único
+### 14.1 Callback único
 
-Registrar en ambos proveedores:
+Registrar el callback de Google Drive:
 
 ```text
 https://YOUR_PROJECT.supabase.co/functions/v1/storage-oauth-callback
@@ -403,7 +378,7 @@ Configurar el mismo valor en:
 STORAGE_OAUTH_REDIRECT_URI=...
 ```
 
-### 15.2 Google Drive
+### 14.2 Google Drive
 
 Habilitar Google Drive API en el proyecto OAuth y permitir el scope:
 
@@ -413,17 +388,7 @@ openid email https://www.googleapis.com/auth/drive.appdata
 
 CapitalFlow crea los backups en `appDataFolder`; no solicita acceso general a todo My Drive.
 
-### 15.3 Microsoft OneDrive
-
-En Microsoft Entra agregar permiso delegado:
-
-```text
-Files.ReadWrite.AppFolder
-```
-
-Además se usan `openid offline_access User.Read` para identidad y renovación. La app escribe en su carpeta especial de aplicación.
-
-### 15.4 Funciones
+### 14.3 Funciones
 
 Desplegar además:
 
@@ -438,15 +403,15 @@ supabase functions deploy cloud-backup-worker --no-verify-jwt
 supabase functions deploy import-transactions
 ```
 
-### 15.5 Cron de backup
+### 14.4 Cron de backup
 
 Invocar `cloud-backup-worker` cada hora con `x-cron-secret`. El worker solo procesa conexiones cuya `next_backup_at` venció y vuelve a comprobar que exista un plan anual activo. La frecuencia efectiva de cada usuario puede ser manual, diaria o semanal.
 
-### 15.6 Restore drill obligatorio
+### 14.5 Restore drill obligatorio
 
 Antes de producción:
 1. crear datos de prueba;
-2. crear backup en Google Drive y en OneDrive;
+2. crear backup en Google Drive;
 3. modificar/eliminar movimientos;
 4. ejecutar restore;
 5. comprobar que se creó `pre_restore`;
@@ -455,7 +420,7 @@ Antes de producción:
 8. alterar manualmente un archivo remoto y verificar que el checksum bloquee el restore.
 
 
-## 16. Onboarding y cuentas independientes
+## 15. Onboarding y cuentas independientes
 
 Aplicar también:
 
@@ -472,7 +437,7 @@ Checklist E2E obligatorio:
 - [ ] usuario anual crea principal + viaje/proyecto, ve cada cuenta de forma independiente en dashboard/libro, archiva y restaura la secundaria;
 - [ ] backup anual contiene tanto la secundaria activa como archivada;
 - [ ] downgrade anual→semanal archiva automáticamente secundarias; re-upgrade anual permite restaurarlas;
-- [ ] OAuth Gmail/Outlook vuelve al onboarding y dispara sync inicial sin botón manual;
+- [ ] OAuth Gmail vuelve al onboarding y dispara sync inicial sin botón manual;
 - [ ] APK con allow-list vacía detecta localmente una notificación financiera y descarta ruido;
 - [ ] aceptar una excepción crea reglas y puede resolver otras pendientes compatibles;
 - [ ] dashboard y ajustes no contienen ningún porcentaje de automatización/intervención;
