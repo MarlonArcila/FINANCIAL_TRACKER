@@ -42,17 +42,7 @@ async function copyDirectory(source, destination) {
 async function patchManifest(file) {
   let source = await readFile(file, "utf8");
   if (source.includes("FinanceNotificationListenerService")) return;
-  const service = `
-        <service
-            android:name="com.capitalflow.notification.FinanceNotificationListenerService"
-            android:label="@string/capitalflow_notification_listener_label"
-            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE"
-            android:exported="false">
-            <intent-filter>
-                <action android:name="android.service.notification.NotificationListenerService" />
-            </intent-filter>
-        </service>
-`;
+  const service = `\n        <service\n            android:name="com.capitalflow.notification.FinanceNotificationListenerService"\n            android:label="@string/capitalflow_notification_listener_label"\n            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE"\n            android:exported="false">\n            <intent-filter>\n                <action android:name="android.service.notification.NotificationListenerService" />\n            </intent-filter>\n        </service>\n`;
   if (!source.includes("</application>")) throw new Error("AndroidManifest.xml has no </application> tag");
   source = source.replace("</application>", `${service}    </application>`);
   await writeFile(file, source);
@@ -67,19 +57,6 @@ async function patchStrings(file) {
 
 async function writeMainActivity(file, packageName) {
   await mkdir(path.dirname(file), { recursive: true });
-  const source = `package ${packageName};
-
-import android.os.Bundle;
-import com.getcapacitor.BridgeActivity;
-import com.capitalflow.notification.NotificationAccessPlugin;
-
-public class MainActivity extends BridgeActivity {
-    @Override
-    public void onCreate(Bundle savedInstanceState) {
-        registerPlugin(NotificationAccessPlugin.class);
-        super.onCreate(savedInstanceState);
-    }
-}
-`;
+  const source = `package ${packageName};\n\nimport android.os.Bundle;\nimport com.getcapacitor.BridgeActivity;\nimport com.capitalflow.notification.NotificationAccessPlugin;\n\npublic class MainActivity extends BridgeActivity {\n    @Override\n    public void onCreate(Bundle savedInstanceState) {\n        registerPlugin(NotificationAccessPlugin.class);\n        super.onCreate(savedInstanceState);\n    }\n}\n`;
   await writeFile(file, source);
 }
