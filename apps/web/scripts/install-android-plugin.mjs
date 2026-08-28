@@ -20,10 +20,14 @@ await writeMainActivity(path.join(androidRoot, "app/src/main/java", packagePath,
 console.log(`Installed NotificationAccess for ${appId}. Run npx cap sync android, then build in Android Studio.`);
 
 async function readAppId(configPath) {
+  const environmentAppId = process.env.CAPACITOR_APP_ID?.trim();
+  if (environmentAppId) return environmentAppId;
   const source = await readFile(configPath, "utf8");
-  const match = source.match(/appId:\s*["']([^"']+)["']/u);
-  if (!match) throw new Error("Could not read appId from capacitor.config.ts");
-  return match[1];
+  const directMatch = source.match(/appId:\s*["']([^"']+)["']/u);
+  if (directMatch) return directMatch[1];
+  const declarationMatch = source.match(/const\s+appId\s*=\s*[^;]*\|\|\s*["']([^"']+)["']/u);
+  if (!declarationMatch) throw new Error("Could not read appId from capacitor.config.ts");
+  return declarationMatch[1];
 }
 
 async function assertExists(file, hint) {
