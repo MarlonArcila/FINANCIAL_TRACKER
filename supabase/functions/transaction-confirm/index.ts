@@ -1,5 +1,6 @@
 import { recordAuditEvent } from "../_shared/audit.ts";
 import { errorResponse, handleOptions, HttpError, json, readJson } from "../_shared/http.ts";
+import { withAdditionalCors } from "../_shared/additional-cors.ts";
 import { reprocessPendingCandidates } from "../_shared/automation.ts";
 import { assertEntitled, createServiceClient, requireUser } from "../_shared/supabase.ts";
 
@@ -13,7 +14,7 @@ interface CandidateDecision {
   learnCategory?: boolean;
 }
 
-Deno.serve(async (request) => {
+Deno.serve((request) => withAdditionalCors(request, async () => {
   const preflight = handleOptions(request);
   if (preflight) return preflight;
   try {
@@ -66,7 +67,7 @@ Deno.serve(async (request) => {
   } catch (error) {
     return errorResponse(error);
   }
-});
+}));
 
 async function recordOnboardingAssociation(service: ReturnType<typeof createServiceClient>, userId: string): Promise<number | null> {
   const { data: state, error } = await service.from("onboarding_state")

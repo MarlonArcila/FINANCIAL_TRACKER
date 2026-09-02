@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "npm:@supabase/supabase-js@2";
 
 import { errorResponse, handleOptions, HttpError, json } from "../_shared/http.ts";
+import { withAdditionalCors } from "../_shared/additional-cors.ts";
 import { createServiceClient, requireUser } from "../_shared/supabase.ts";
 
 const TABLES = [
@@ -10,7 +11,7 @@ const TABLES = [
   "financial_preferences", "advisor_runs", "account_assignment_rules", "data_imports", "storage_connections", "cloud_backups",
 ] as const;
 
-Deno.serve(async (request) => {
+Deno.serve((request) => withAdditionalCors(request, async () => {
   const preflight = handleOptions(request);
   if (preflight) return preflight;
   try {
@@ -47,7 +48,7 @@ Deno.serve(async (request) => {
   } catch (error) {
     return errorResponse(error);
   }
-});
+}));
 
 async function fetchAllForUser(service: SupabaseClient, table: string, userId: string): Promise<unknown[]> {
   const rows: unknown[] = [];

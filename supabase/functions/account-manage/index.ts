@@ -2,6 +2,7 @@ import { decideAccountCreatePolicy, type AccountPurpose, type SubscriptionInterv
 import { recordAuditEvent } from "../_shared/audit.ts";
 import { reprocessPendingCandidates } from "../_shared/automation.ts";
 import { errorResponse, handleOptions, HttpError, json, readJson } from "../_shared/http.ts";
+import { withAdditionalCors } from "../_shared/additional-cors.ts";
 import { assertEntitled, createServiceClient, requireUser } from "../_shared/supabase.ts";
 
 type Body =
@@ -9,7 +10,7 @@ type Body =
   | { action: "archive"; accountId: string }
   | { action: "restore"; accountId: string };
 
-Deno.serve(async (request) => {
+Deno.serve((request) => withAdditionalCors(request, async () => {
   const preflight = handleOptions(request); if (preflight) return preflight;
   try {
     if (request.method !== "POST") throw new HttpError(405, "method_not_allowed");
@@ -66,7 +67,7 @@ Deno.serve(async (request) => {
     await audit(service, user.id, isArchive ? "account.archived" : "account.restored", body.accountId, {});
     return json({ account: data });
   } catch (error) { return errorResponse(error); }
-});
+}));
 
 async function activeInterval(service: ReturnType<typeof createServiceClient>, userId: string): Promise<SubscriptionInterval> {
   const { data, error } = await service.from("subscriptions").select("interval,current_period_end,updated_at")

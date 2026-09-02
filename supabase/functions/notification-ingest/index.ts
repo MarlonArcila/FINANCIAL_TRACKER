@@ -1,9 +1,10 @@
 import { validateDeviceCandidate } from "../_shared/financial-parser.ts";
 import { errorResponse, handleOptions, HttpError, json, readJson } from "../_shared/http.ts";
+import { withAdditionalCors } from "../_shared/additional-cors.ts";
 import { ingestCandidate } from "../_shared/ingestion.ts";
 import { assertEntitled, createServiceClient, requireUser } from "../_shared/supabase.ts";
 
-Deno.serve(async (request) => {
+Deno.serve((request) => withAdditionalCors(request, async () => {
   const preflight = handleOptions(request);
   if (preflight) return preflight;
   try {
@@ -42,4 +43,4 @@ Deno.serve(async (request) => {
   } catch (error) {
     return errorResponse(error);
   }
-});
+}));

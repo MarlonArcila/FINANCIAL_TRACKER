@@ -1,8 +1,9 @@
 import { performCloudBackup, type BackupConnection } from "../_shared/cloud-backup-service.ts";
 import { errorResponse, handleOptions, HttpError, json, readJson } from "../_shared/http.ts";
+import { withAdditionalCors } from "../_shared/additional-cors.ts";
 import { assertAnnualEntitled, createServiceClient, requireUser } from "../_shared/supabase.ts";
 
-Deno.serve(async (request) => {
+Deno.serve((request) => withAdditionalCors(request, async () => {
   const preflight = handleOptions(request); if (preflight) return preflight;
   try {
     if (request.method !== "POST") throw new HttpError(405, "method_not_allowed");
@@ -14,4 +15,4 @@ Deno.serve(async (request) => {
     const result = await performCloudBackup(service, user.id, connection as BackupConnection, body.kind ?? "manual");
     return json({ backupId: result.id, filename: result.filename, bytes: result.bytes, checksum: result.checksum });
   } catch (error) { return errorResponse(error); }
-});
+}));

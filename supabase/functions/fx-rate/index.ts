@@ -1,5 +1,6 @@
 import { optionalEnv } from "../_shared/env.ts";
 import { errorResponse, handleOptions, HttpError, json, readJson } from "../_shared/http.ts";
+import { withAdditionalCors } from "../_shared/additional-cors.ts";
 import { assertEntitled, createServiceClient, requireUser } from "../_shared/supabase.ts";
 
 interface FxRequest {
@@ -12,7 +13,7 @@ interface FxRequest {
 const ZERO_DECIMAL = new Set(["COP", "JPY", "KRW", "CLP", "PYG", "VND"]);
 const GOOGLE_PROVIDER = "google_finance_web";
 
-Deno.serve(async (request) => {
+Deno.serve((request) => withAdditionalCors(request, async () => {
   const preflight = handleOptions(request);
   if (preflight) return preflight;
   try {
@@ -58,7 +59,7 @@ Deno.serve(async (request) => {
   } catch (error) {
     return errorResponse(error);
   }
-});
+}));
 
 async function getRate(
   service: ReturnType<typeof createServiceClient>,
