@@ -1,10 +1,11 @@
 import { buildBackupDocument, parseBackupDocument, sha256Hex } from "../_shared/backup.ts";
 import { downloadBackupFile, uploadBackupFile } from "../_shared/cloud-storage.ts";
 import { errorResponse, handleOptions, HttpError, json, readJson } from "../_shared/http.ts";
+import { withAdditionalCors } from "../_shared/additional-cors.ts";
 import { assertAnnualEntitled, createServiceClient, requireUser } from "../_shared/supabase.ts";
 import { getStorageAccessToken, type StorageProvider } from "../_shared/storage-oauth.ts";
 
-Deno.serve(async (request) => {
+Deno.serve((request) => withAdditionalCors(request, async () => {
   const preflight = handleOptions(request); if (preflight) return preflight;
   try {
     if (request.method !== "POST") throw new HttpError(405, "method_not_allowed");
@@ -54,4 +55,4 @@ Deno.serve(async (request) => {
     if (connectionUpdateError) throw connectionUpdateError;
     return json({ restored: true, result: restoreResult, safetyBackupName: safetyRemote.name });
   } catch (error) { return errorResponse(error); }
-});
+}));

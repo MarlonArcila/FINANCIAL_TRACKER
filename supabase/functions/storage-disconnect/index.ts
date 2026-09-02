@@ -1,7 +1,8 @@
 import { errorResponse, handleOptions, HttpError, json, readJson } from "../_shared/http.ts";
+import { withAdditionalCors } from "../_shared/additional-cors.ts";
 import { assertAnnualEntitled, createServiceClient, requireUser } from "../_shared/supabase.ts";
 
-Deno.serve(async (request) => {
+Deno.serve((request) => withAdditionalCors(request, async () => {
   const preflight = handleOptions(request); if (preflight) return preflight;
   try {
     if (request.method !== "POST") throw new HttpError(405, "method_not_allowed");
@@ -21,4 +22,4 @@ Deno.serve(async (request) => {
     if (updateError) throw updateError;
     return json({ disconnected: true });
   } catch (error) { return errorResponse(error); }
-});
+}));

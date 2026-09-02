@@ -1,5 +1,6 @@
 import { recordAuditEvent } from "../_shared/audit.ts";
 import { errorResponse, handleOptions, HttpError, json, readJson } from "../_shared/http.ts";
+import { withAdditionalCors } from "../_shared/additional-cors.ts";
 import { assertEntitled, createServiceClient, requireUser } from "../_shared/supabase.ts";
 
 type Row = {
@@ -27,7 +28,7 @@ type Body = {
   finalChunk?: boolean;
 };
 
-Deno.serve(async (request) => {
+Deno.serve((request) => withAdditionalCors(request, async () => {
   const preflight = handleOptions(request);
   if (preflight) return preflight;
   try {
@@ -134,7 +135,7 @@ Deno.serve(async (request) => {
   } catch (error) {
     return errorResponse(error);
   }
-});
+}));
 
 async function createImport(service: ReturnType<typeof createServiceClient>, userId: string, body: Body) {
   if (!body.filename || !body.fileType) throw new HttpError(422, "filename_and_file_type_required");
