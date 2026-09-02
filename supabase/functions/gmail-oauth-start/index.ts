@@ -1,10 +1,11 @@
 import { optionalEnv, requiredEnv } from "../_shared/env.ts";
-import { errorResponse, handleOptions, HttpError, json, readJson } from "../_shared/http.ts";
+import { errorResponse, corsHeaders, handleOptions, HttpError, json, readJson } from "../_shared/http.ts";
+import { additionalAllowedCorsOrigin, isAllowedGmailOauthReturnOrigin } from "./cors.ts";
 import { createOAuthState } from "../_shared/oauth-state.ts";
 import { enforceUserRateLimit, RATE_LIMIT_POLICIES } from "../_shared/rate-limit.ts";
 import { assertEntitled, createServiceClient, requireUser } from "../_shared/supabase.ts";
 
-Deno.serve(async (request) => {
+const gmailOauthStartHandler = async (request) => {
   const preflight = handleOptions(request);
   if (preflight) return preflight;
   try {
@@ -29,11 +30,55 @@ Deno.serve(async (request) => {
     url.searchParams.set("code_challenge_method", "S256");
     return json({ authorizationUrl: url.toString() });
   } catch (error) { return errorResponse(error); }
-});
+};
 
 function validateReturnUrl(value: string | undefined): string {
   const appUrl = new URL(requiredEnv("APP_URL"));
   const candidate = new URL(value || `${appUrl.origin}/#/integrations`);
-  if (candidate.origin !== appUrl.origin) throw new HttpError(422, "invalid_return_url");
+  if (!isAllowedGmailOauthReturnOrigin(
+    candidate.origin,
+    appUrl.origin,
+    (name) => Deno.env.get(name),
+  )) throw new HttpError(422, "invalid_return_url");
   return candidate.toString();
 }
+
+function additionalCorsHeadersForRequest(request: Request): Record<string, string> | null {
+  const allowedOrigin = additionalAllowedCorsOrigin(
+    request.headers.get("origin"),
+    (name) => Deno.env.get(name),
+  );
+  if (!allowedOrigin) return null;
+
+  return {
+    ...corsHeaders(),
+    "access-control-allow-origin": allowedOrigin,
+    "vary": "Origin",
+  };
+}
+
+function withAdditionalCors(request: Request, response: Response): Response {
+  const additionalHeaders = additionalCorsHeadersForRequest(request);
+  if (!additionalHeaders) return response;
+
+  const headers = new Headers(response.headers);
+  for (const [name, value] of Object.entries(additionalHeaders)) {
+    headers.set(name, value);
+  }
+
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  });
+}
+
+Deno.serve(async (request) => {
+  const additionalHeaders = additionalCorsHeadersForRequest(request);
+  if (request.method === "OPTIONS" && additionalHeaders) {
+    return new Response(null, { status: 204, headers: additionalHeaders });
+  }
+
+  const response = await gmailOauthStartHandler(request);
+  return withAdditionalCors(request, response);
+});
