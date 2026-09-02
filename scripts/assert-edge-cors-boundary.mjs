@@ -35,4 +35,16 @@ function walk(dir) {
 }
 walk(functionsRoot);
 if (offenders.length) fail(`wildcard_cors_found:${offenders.join(",")}`);
+
+// Browser-invoked Gmail calibration sync must honor the exact additional-origin
+// allowlist used for approved Preview origins. This prevents onboarding from
+// regressing while keeping the production APP_URL policy fail-closed.
+const gmailSyncPath = path.join(functionsRoot, "gmail-sync", "index.ts");
+const gmailSync = fs.readFileSync(gmailSyncPath, "utf8");
+if (!gmailSync.includes('import { withAdditionalCors } from "../_shared/additional-cors.ts";')) {
+  fail("gmail_sync_additional_cors_import_missing");
+}
+if (!gmailSync.includes('Deno.serve((request) => withAdditionalCors(request, async () => {')) {
+  fail("gmail_sync_additional_cors_wrapper_missing");
+}
 console.log("EDGE_CORS_ORIGIN_BOUNDARY=GREEN");
