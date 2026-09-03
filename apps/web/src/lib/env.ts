@@ -10,6 +10,8 @@ export const env = {
   weeklyPriceLabel: import.meta.env.VITE_WEEKLY_PRICE_LABEL as string | undefined,
   annualPriceLabel: import.meta.env.VITE_ANNUAL_PRICE_LABEL as string | undefined,
   annualSavingsLabel: import.meta.env.VITE_ANNUAL_SAVINGS_LABEL as string | undefined,
+  androidPlayUrl: import.meta.env.VITE_ANDROID_PLAY_URL as string | undefined,
+  androidApkUrl: import.meta.env.VITE_ANDROID_APK_URL as string | undefined,
 };
 
 export const hasSupabaseConfig = Boolean(env.supabaseUrl && env.supabaseAnonKey);

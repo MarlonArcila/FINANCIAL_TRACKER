@@ -130,6 +130,14 @@ export function IntegrationsPage({ user }: { user: AppUser }) {
     }
   }
 
+  async function requestNotificationAccess(): Promise<void> {
+    const accepted = window.confirm(
+      "CapitalFlow necesita acceso a notificaciones para detectar movimientos financieros. El analisis se realiza en el dispositivo y solo se envian a tu cuenta los candidatos que el parser identifica como financieros. Puedes limitar las apps y revocar el acceso cuando quieras. Deseas continuar?",
+    );
+    if (!accepted) return;
+    await openNotificationPermissionSettings();
+  }
+
   return (
     <section className="page">
       <div className="page-heading"><div><span className="eyebrow">ORÍGENES DE DATOS</span><h1>Integraciones</h1><p>Autoriza únicamente las fuentes que quieras revisar.</p></div></div>
@@ -142,8 +150,8 @@ export function IntegrationsPage({ user }: { user: AppUser }) {
           <div><span className="eyebrow">ANDROID</span><h2>Notificaciones del dispositivo</h2></div>
           {!nativeAndroid ? <Notice tone="warning">Esta capacidad requiere el APK Android. La PWA del navegador no puede leer notificaciones de otras apps.</Notice> : (
             <>
-              <p>Permiso: <strong>{permission ? "Concedido" : "Pendiente"}</strong></p>
-              <button className="secondary-button" type="button" onClick={() => void openNotificationPermissionSettings()}>{permission ? "Revisar permiso" : "Conceder permiso"}</button>
+              <Notice tone="info">CapitalFlow usa el acceso a notificaciones solo para detectar movimientos financieros. El parser trabaja localmente y solo envia candidatos financieros a tu cuenta. Puedes limitar las aplicaciones y revocar el permiso desde Android.</Notice><p>Permiso: <strong>{permission ? "Concedido" : "Pendiente"}</strong></p>
+              <button className="secondary-button" type="button" onClick={() => void requestNotificationAccess()}>{permission ? "Revisar permiso" : "Conceder permiso"}</button>
               <details><summary>Filtro avanzado de aplicaciones</summary><label className="field"><span>Limitar a paquetes concretos, uno por línea</span><textarea rows={5} value={packages} onChange={(event) => setPackages(event.target.value)} placeholder="com.ejemplo.billetera" /><small>Lista vacía = detección automática local en todas las notificaciones; solo se envían las señales que el parser identifica como financieras.</small></label></details>
               <div className="button-row"><button className="secondary-button" type="button" disabled={busy !== null} onClick={() => void savePackages()}>Guardar lista</button><button className="primary-button" type="button" disabled={!permission || busy !== null} onClick={() => void syncAndroid()}>Enviar candidatos</button></div>
             </>
