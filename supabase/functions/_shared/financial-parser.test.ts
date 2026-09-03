@@ -37,6 +37,47 @@ test("mail parser handles decimal currencies in minor units", async () => {
   assert.equal(candidate.amountMinor, 123_456);
 });
 
+test("mail parser recognizes multilingual directional transactions and PRUEBA CAPITALFLOW B", async () => {
+  const cases = [
+    { label: "capitalflow-b", title: "PRUEBA CAPITALFLOW B", text: "Transferencia recibida por COP 26491", currency: "COP", kind: "income", amount: 26_491 },
+    { label: "english-merchant", title: "SUCCESS TRANSACTION B", text: "Your transaction was successful at NUCES for USD 20.00", currency: "USD", kind: "expense", amount: 2_000 },
+    { label: "portuguese-income", title: "Transferencia recebida", text: "Pagamento recebido BRL 125,50", currency: "BRL", kind: "income", amount: 12_550 },
+    { label: "french-expense", title: "Paiement effectue", text: "Paiement effectue EUR 42,50 chez Boulangerie", currency: "EUR", kind: "expense", amount: 4_250 },
+    { label: "german-income", title: "Zahlung erhalten", text: "Zahlung erhalten EUR 88,40", currency: "EUR", kind: "income", amount: 8_840 },
+    { label: "chinese-expense", title: "\u8d2d\u4e70", text: "\u8d2d\u4e70 CNY 120.50", currency: "CNY", kind: "expense", amount: 12_050 },
+    { label: "japanese-income", title: "\u5165\u91d1", text: "\u5165\u91d1 JPY 5000", currency: "JPY", kind: "income", amount: 5_000 },
+  ] as const;
+
+  for (const item of cases) {
+    const candidate = await parseMailMessage({
+      provider: "gmail",
+      externalId: item.label,
+      occurredAt: "2026-09-03T17:00:00.000Z",
+      sender: "Bank <bank@example.test>",
+      title: item.title,
+      text: item.text,
+      defaultCurrency: item.currency,
+    });
+    assert.ok(candidate, item.label);
+    assert.equal(candidate.proposedKind, item.kind, item.label);
+    assert.equal(candidate.amountMinor, item.amount, item.label);
+    assert.equal(candidate.currency, item.currency, item.label);
+  }
+});
+
+test("generic successful transaction remains unclassified when direction is absent", async () => {
+  const candidate = await parseMailMessage({
+    provider: "gmail",
+    externalId: "ambiguous-success",
+    occurredAt: "2026-09-03T17:00:00.000Z",
+    sender: "Bank <bank@example.test>",
+    title: "SUCCESS TRANSACTION",
+    text: "Your transaction was successful for USD 42.00",
+    defaultCurrency: "USD",
+  });
+  assert.equal(candidate, null);
+});
+
 test("device candidates are canonicalized by the server", async () => {
   const raw = {
     localId: "local-notification-1",

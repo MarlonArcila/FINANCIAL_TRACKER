@@ -128,7 +128,7 @@ export async function syncGmailConnection(
     const listUrl = new URL("https://gmail.googleapis.com/gmail/v1/users/me/messages");
     listUrl.searchParams.set("maxResults", optionalEnv("GMAIL_MAX_RESULTS") ?? "100");
     listUrl.searchParams.set("labelIds", "INBOX");
-    listUrl.searchParams.set("q", optionalEnv("GMAIL_QUERY") ?? "newer_than:30d {compra pago abono transferencia debitado debito retiro pagaste recibiste consignacion deposito charged purchase withdrawal credited received transaction}");
+    listUrl.searchParams.set("q", optionalEnv("GMAIL_QUERY") ?? "newer_than:30d");
     const response = await googleFetch(accessToken, listUrl.toString());
     const payload = await response.json() as { messages?: Array<{ id: string }> };
     messageIds = (payload.messages ?? []).map((message) => message.id);

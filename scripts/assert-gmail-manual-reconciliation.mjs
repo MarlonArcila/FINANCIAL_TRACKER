@@ -19,9 +19,14 @@ requireMatch(
   !sync.includes('enqueueMailSync(service, connection.id, "gmail", connection.cursor)'),
   'manual gmail sync must not depend only on history cursor',
 );
-for (const term of ['compra','pago','abono','transferencia','charged','purchase','received','transaction']) {
-  requireMatch(gmail.includes(term), `default Gmail reconciliation query missing ${term}`);
-}
+requireMatch(
+  gmail.includes('optionalEnv(\"GMAIL_QUERY\") ?? \"newer_than:30d\"'),
+  'manual Gmail reconciliation must scan recent inbox independent of language',
+);
+requireMatch(
+  !gmail.includes('newer_than:30d {'),
+  'manual Gmail reconciliation must not use a language keyword allowlist',
+);
 requireMatch(gmail.includes('messageIds.slice(0, 100)'), 'reconciliation must remain bounded to 100 messages');
 requireMatch(gmail.includes('ingestCandidate'), 'reconciliation must preserve ingestion/deduplication path');
 console.log('GMAIL_MANUAL_RECONCILIATION_CONTRACT=PASS');

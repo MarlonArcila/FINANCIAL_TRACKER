@@ -23,10 +23,53 @@ export interface ParsedCandidate {
   titleSanitized?: string | null;
 }
 
-const VERSION = "edge-2026-08-12.1";
+const VERSION = "edge-2026-09-03.1";
 const ZERO_DECIMAL = new Set(["COP", "JPY", "KRW", "CLP", "PYG", "VND"]);
-const EXPENSE = ["compra", "pago realizado", "pagaste", "debitado", "debito", "retiro", "spent", "charged", "purchase", "withdrawal", "payment sent", "transferencia enviada"];
-const INCOME = ["abono", "abonado", "acreditado", "consignacion", "deposito recibido", "recibiste", "transferencia recibida", "credited", "payment received", "you received", "incoming transfer"];
+const EXPENSE = [
+  // Spanish and English.
+  "compra", "pago realizado", "pagaste", "debitado", "debito", "retiro", "transferencia enviada",
+  "spent", "charged", "purchase", "withdrawal", "payment sent", "paid", "debited", "card purchase",
+  "transaction was successful at", "transaction successful at",
+  // Portuguese, French, German, Italian, Dutch and Polish (accent-insensitive normalization).
+  "pagamento realizado", "pagou", "saque", "transferencia enviada",
+  "achat", "paiement effectue", "paye", "debite", "retrait", "virement envoye",
+  "kauf", "bezahlt", "belastet", "abbuchung", "abhebung", "uberweisung gesendet",
+  "acquisto", "pagamento effettuato", "pagato", "addebitato", "prelievo", "bonifico inviato",
+  "aankoop", "betaling gedaan", "betaald", "afgeschreven", "opname", "overschrijving verzonden",
+  "zakup", "platnosc wykonana", "zaplacono", "obciazono", "wyplata", "przelew wyslany",
+  // Turkish and Indonesian.
+  "\u00f6deme yap\u0131ld\u0131", "\u00f6dendi", "bor\u00e7land\u0131r\u0131ld\u0131", "para \u00e7ekme", "transfer g\u00f6nderildi",
+  "pembelian", "pembayaran dilakukan", "dibayar", "didebit", "penarikan", "transfer dikirim",
+  // Chinese, Japanese and Korean.
+  "\u8d2d\u4e70", "\u8cfc\u8cb7", "\u652f\u4ed8", "\u6263\u6b3e", "\u5df2\u6263\u6b3e", "\u53d6\u6b3e", "\u8f6c\u51fa", "\u8f49\u51fa",
+  "\u8cfc\u5165", "\u652f\u6255\u3044", "\u6c7a\u6e08", "\u5f15\u304d\u843d\u3068\u3057", "\u51fa\u91d1", "\u9001\u91d1\u3057\u307e\u3057\u305f",
+  "\uad6c\ub9e4", "\uacb0\uc81c", "\ucd9c\uae08", "\uc1a1\uae08 \uc644\ub8cc",
+  // Arabic and Hindi.
+  "\u0634\u0631\u0627\u0621", "\u062a\u0645 \u0627\u0644\u062f\u0641\u0639", "\u0645\u062f\u0641\u0648\u0639", "\u062e\u0635\u0645", "\u0633\u062d\u0628", "\u062a\u062d\u0648\u064a\u0644 \u0645\u0631\u0633\u0644",
+  "\u0916\u0930\u0940\u0926", "\u092d\u0941\u0917\u0924\u093e\u0928 \u0915\u093f\u092f\u093e", "\u0921\u0947\u092c\u093f\u091f", "\u0928\u093f\u0915\u093e\u0938\u0940", "\u0905\u0902\u0924\u0930\u0923 \u092d\u0947\u091c\u093e",
+];
+const INCOME = [
+  // Spanish and English.
+  "abono", "abonado", "acreditado", "consignacion", "deposito recibido", "recibiste", "transferencia recibida",
+  "credited", "payment received", "you received", "incoming transfer", "deposit received", "funds received",
+  // Portuguese, French, German, Italian, Dutch and Polish.
+  "creditado", "pagamento recebido", "recebeu", "transferencia recebida", "deposito recebido",
+  "credite", "paiement recu", "virement recu", "depot recu",
+  "gutgeschrieben", "zahlung erhalten", "uberweisung erhalten", "einzahlung erhalten", "geldeingang",
+  "accreditato", "pagamento ricevuto", "bonifico ricevuto", "deposito ricevuto",
+  "bijgeschreven", "betaling ontvangen", "overschrijving ontvangen", "storting ontvangen",
+  "uznano", "platnosc otrzymana", "przelew otrzymany", "wplata",
+  // Turkish and Indonesian.
+  "\u00f6deme al\u0131nd\u0131", "hesaba ge\u00e7ti", "gelen transfer",
+  "pembayaran diterima", "diterima", "transfer masuk", "dikreditkan",
+  // Chinese, Japanese and Korean.
+  "\u6536\u5230", "\u6536\u6b3e", "\u5165\u8d26", "\u5165\u8cec", "\u5230\u8d26", "\u5230\u8cec", "\u8f6c\u5165", "\u8f49\u5165",
+  "\u5165\u91d1", "\u53d7\u3051\u53d6\u308a", "\u632f\u8fbc\u5165\u91d1",
+  "\uc785\uae08", "\uacb0\uc81c \uc785\uae08", "\uc774\uccb4 \uc785\uae08", "\uc218\uc2e0",
+  // Arabic and Hindi.
+  "\u062a\u0645 \u0627\u0644\u0627\u0633\u062a\u0644\u0627\u0645", "\u0627\u0633\u062a\u0644\u0627\u0645", "\u0625\u064a\u062f\u0627\u0639", "\u062a\u062d\u0648\u064a\u0644 \u0648\u0627\u0631\u062f",
+  "\u092a\u094d\u0930\u093e\u092a\u094d\u0924", "\u091c\u092e\u093e", "\u0915\u094d\u0930\u0947\u0921\u093f\u091f", "\u092d\u0941\u0917\u0924\u093e\u0928 \u092a\u094d\u0930\u093e\u092a\u094d\u0924", "\u0905\u0902\u0924\u0930\u0923 \u092a\u094d\u0930\u093e\u092a\u094d\u0924",
+];
 const NOISE = /otp|one[- ]time password|c[oó]digo de verificaci[oó]n|clave din[aá]mica|verification code|promoci[oó]n|oferta|cup[oó]n|saldo disponible|available balance/iu;
 const FAILURE = /fallid[oa]|rechazad[oa]|declined|failed|cancelad[oa]/iu;
 
@@ -137,8 +180,9 @@ function parseMoney(text: string, defaultCurrency: string): { amountMinor: numbe
     if (value === null || value <= 0 || value > 9_007_199_254_740_991) continue;
     const index = match.index ?? 0;
     const context = text.slice(Math.max(0, index - 22), index + raw.length + 22);
-    let score = /\b(?:COP|USD|EUR|GBP|MXN|CAD|BRL)\b|US\$|R\$|[$€£]/iu.test(context) ? 5 : 0;
-    if (/compra|pago|debit|spent|charged|retiro|abono|acredit|recib|deposit|transfer|monto|valor|total/iu.test(context)) score += 3;
+    let score = /\b(?:COP|USD|EUR|GBP|MXN|CAD|BRL|JPY|KRW|CLP|PYG|VND|CNY|INR|AUD|NZD|CHF|SGD|HKD|TRY)\b|US\$|R\$|[$\u20ac\u00a3\u20b9\u20a9\u20ba]/iu.test(context) ? 5 : 0;
+    const directionContext = normalize(context);
+    if (EXPENSE.some((word) => directionContext.includes(normalize(word))) || INCOME.some((word) => directionContext.includes(normalize(word)))) score += 3;
     if (value >= 1900 && value <= 2100 && !/[$€£]/u.test(context)) score -= 5;
     values.push({ raw, value, score });
   }
@@ -178,13 +222,17 @@ function parseToken(raw: string, exponent: number): number | null {
 }
 
 function detectCurrency(text: string, fallback: string): string {
-  if (/\bCOP\b/iu.test(text)) return "COP";
-  if (/\bUSD\b|US\$/iu.test(text)) return "USD";
-  if (/\bEUR\b|€/iu.test(text)) return "EUR";
-  if (/\bGBP\b|£/iu.test(text)) return "GBP";
-  if (/\bMXN\b/iu.test(text)) return "MXN";
-  if (/\bCAD\b/iu.test(text)) return "CAD";
-  if (/\bBRL\b|R\$/iu.test(text)) return "BRL";
+  const codes = ["COP", "USD", "EUR", "GBP", "MXN", "CAD", "BRL", "JPY", "KRW", "CLP", "PYG", "VND", "CNY", "INR", "AUD", "NZD", "CHF", "SGD", "HKD", "TRY"];
+  for (const code of codes) {
+    if (new RegExp(`(?:^|[^A-Z0-9])${code}(?:$|[^A-Z0-9])`, "iu").test(text)) return code;
+  }
+  if (/US\$/iu.test(text)) return "USD";
+  if (/R\$/iu.test(text)) return "BRL";
+  if (/\u20ac/u.test(text)) return "EUR";
+  if (/\u00a3/u.test(text)) return "GBP";
+  if (/\u20b9/u.test(text)) return "INR";
+  if (/\u20a9/u.test(text)) return "KRW";
+  if (/\u20ba/u.test(text)) return "TRY";
   return normalizeCurrency(fallback);
 }
 
