@@ -133,9 +133,22 @@ export function SubscriptionPage({
         </article>
       </div>
       <div className="button-row">
-        <button className="text-button" type="button" disabled={busy !== null} onClick={() => void onRefresh()}>Ya pagué: verificar estado</button>
+        <button className="text-button" type="button" disabled={busy !== null} onClick={() => void onRefresh()}>Reintentar verificacion</button>
         {active ? <button className="text-button" type="button" onClick={() => { window.location.hash = "/dashboard"; }}>Volver al tablero</button> : null}
       </div>
+
+      {active ? (
+        <article className="panel android-distribution-panel">
+          <h2>Instala CapitalFlow en Android</h2>
+          <p>Tu suscripcion activa tambien habilita la app Android. El acceso a tus datos sigue protegido por tu sesion y por la membresia verificada en Whop.</p>
+          <div className="button-row">
+            {env.androidPlayUrl ? <a className="primary-button" href={env.androidPlayUrl} target="_blank" rel="noreferrer">Instalar desde Google Play</a> : null}
+            {env.androidApkUrl ? <a className="secondary-button" href={env.androidApkUrl}>Descargar APK firmada</a> : null}
+          </div>
+          {!env.androidPlayUrl ? <Notice tone="info">El canal Android de Google Play aun no ha sido publicado.</Notice> : null}
+          {env.androidApkUrl ? <small>La APK directa es un canal alternativo. Google Play Protect puede bloquear instalaciones directas en algunos dispositivos porque CapitalFlow solicita acceso a notificaciones para detectar movimientos. Google Play es el canal recomendado.</small> : null}
+        </article>
+      ) : null}
 
       <article className="panel account-control-panel">
         <h2>Control de cuenta y privacidad</h2>

@@ -34,7 +34,9 @@
     "pilot:whop": "node scripts/pilot-whop-e2e.mjs",
     "pilot:cors-runtime": "bash scripts/pilot-cors-runtime-release.sh",
     "pilot:android-device": "bash scripts/pilot-android-device-e2e.sh",
-    "pilot:legal": "node scripts/pilot-legal-privacy.mjs"
+    "pilot:legal": "node scripts/pilot-legal-privacy.mjs",
+    "android:distribution": "bash scripts/build-android-distribution-artifacts.sh",
+    "test:android-distribution": "node scripts/assert-android-distribution-whop-automation.mjs"
   },
   "engines": {
     "node": ">=22.12.0"
