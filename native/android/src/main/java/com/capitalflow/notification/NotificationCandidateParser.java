@@ -18,16 +18,47 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 public final class NotificationCandidateParser {
-    private static final String VERSION = "android-2026-08-12.2";
+    private static final String VERSION = "android-2026-09-03.1";
     private static final long MAX_SAFE_INTEGER = 9_007_199_254_740_991L;
     private static final Set<String> ZERO_DECIMAL = new HashSet<>(Arrays.asList("COP", "JPY", "KRW", "CLP", "PYG", "VND"));
-    private static final String[] EXPENSE = {"compra", "pago realizado", "pagaste", "debitado", "debito", "retiro", "spent", "charged", "purchase", "withdrawal", "payment sent", "transferencia enviada"};
-    private static final String[] INCOME = {"abono", "abonado", "acreditado", "consignacion", "deposito recibido", "recibiste", "transferencia recibida", "credited", "payment received", "you received", "incoming transfer"};
+    private static final String[] EXPENSE = {
+        "compra", "pago realizado", "pagaste", "debitado", "debito", "retiro", "transferencia enviada",
+        "spent", "charged", "purchase", "withdrawal", "payment sent", "paid", "debited", "card purchase",
+        "transaction was successful at", "transaction successful at",
+        "pagamento realizado", "pagou", "saque", "achat", "paiement effectue", "paye", "debite", "retrait", "virement envoye",
+        "kauf", "bezahlt", "belastet", "abbuchung", "abhebung", "uberweisung gesendet",
+        "acquisto", "pagamento effettuato", "pagato", "addebitato", "prelievo", "bonifico inviato",
+        "aankoop", "betaling gedaan", "betaald", "afgeschreven", "opname", "overschrijving verzonden",
+        "zakup", "platnosc wykonana", "zaplacono", "obciazono", "wyplata", "przelew wyslany",
+        "\u00f6deme yap\u0131ld\u0131", "\u00f6dendi", "bor\u00e7land\u0131r\u0131ld\u0131", "para \u00e7ekme", "transfer g\u00f6nderildi",
+        "pembelian", "pembayaran dilakukan", "dibayar", "didebit", "penarikan", "transfer dikirim",
+        "\u8d2d\u4e70", "\u8cfc\u8cb7", "\u652f\u4ed8", "\u6263\u6b3e", "\u5df2\u6263\u6b3e", "\u53d6\u6b3e", "\u8f6c\u51fa", "\u8f49\u51fa",
+        "\u8cfc\u5165", "\u652f\u6255\u3044", "\u6c7a\u6e08", "\u5f15\u304d\u843d\u3068\u3057", "\u51fa\u91d1", "\u9001\u91d1\u3057\u307e\u3057\u305f",
+        "\uad6c\ub9e4", "\uacb0\uc81c", "\ucd9c\uae08", "\uc1a1\uae08 \uc644\ub8cc",
+        "\u0634\u0631\u0627\u0621", "\u062a\u0645 \u0627\u0644\u062f\u0641\u0639", "\u0645\u062f\u0641\u0648\u0639", "\u062e\u0635\u0645", "\u0633\u062d\u0628", "\u062a\u062d\u0648\u064a\u0644 \u0645\u0631\u0633\u0644",
+        "\u0916\u0930\u0940\u0926", "\u092d\u0941\u0917\u0924\u093e\u0928 \u0915\u093f\u092f\u093e", "\u0921\u0947\u092c\u093f\u091f", "\u0928\u093f\u0915\u093e\u0938\u0940", "\u0905\u0902\u0924\u0930\u0923 \u092d\u0947\u091c\u093e"
+    };
+    private static final String[] INCOME = {
+        "abono", "abonado", "acreditado", "consignacion", "deposito recibido", "recibiste", "transferencia recibida",
+        "credited", "payment received", "you received", "incoming transfer", "deposit received", "funds received",
+        "creditado", "pagamento recebido", "recebeu", "transferencia recebida", "deposito recebido",
+        "credite", "paiement recu", "virement recu", "depot recu",
+        "gutgeschrieben", "zahlung erhalten", "uberweisung erhalten", "einzahlung erhalten", "geldeingang",
+        "accreditato", "pagamento ricevuto", "bonifico ricevuto", "deposito ricevuto",
+        "bijgeschreven", "betaling ontvangen", "overschrijving ontvangen", "storting ontvangen",
+        "uznano", "platnosc otrzymana", "przelew otrzymany", "wplata",
+        "\u00f6deme al\u0131nd\u0131", "hesaba ge\u00e7ti", "gelen transfer",
+        "pembayaran diterima", "diterima", "transfer masuk", "dikreditkan",
+        "\u6536\u5230", "\u6536\u6b3e", "\u5165\u8d26", "\u5165\u8cec", "\u5230\u8d26", "\u5230\u8cec", "\u8f6c\u5165", "\u8f49\u5165",
+        "\u5165\u91d1", "\u53d7\u3051\u53d6\u308a", "\u632f\u8fbc\u5165\u91d1",
+        "\uc785\uae08", "\uacb0\uc81c \uc785\uae08", "\uc774\uccb4 \uc785\uae08", "\uc218\uc2e0",
+        "\u062a\u0645 \u0627\u0644\u0627\u0633\u062a\u0644\u0627\u0645", "\u0627\u0633\u062a\u0644\u0627\u0645", "\u0625\u064a\u062f\u0627\u0639", "\u062a\u062d\u0648\u064a\u0644 \u0648\u0627\u0631\u062f",
+        "\u092a\u094d\u0930\u093e\u092a\u094d\u0924", "\u091c\u092e\u093e", "\u0915\u094d\u0930\u0947\u0921\u093f\u091f", "\u092d\u0941\u0917\u0924\u093e\u0928 \u092a\u094d\u0930\u093e\u092a\u094d\u0924", "\u0905\u0902\u0924\u0930\u0923 \u092a\u094d\u0930\u093e\u092a\u094d\u0924"
+    };
     private static final Pattern NOISE = Pattern.compile("otp|one[- ]time password|c[oó]digo de verificaci[oó]n|clave din[aá]mica|verification code|promoci[oó]n|oferta|cup[oó]n|saldo disponible|available balance", Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
     private static final Pattern FAILURE = Pattern.compile("fallid[oa]|rechazad[oa]|declined|failed|cancelad[oa]", Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
     private static final Pattern MONEY = Pattern.compile("(?:\\d{1,3}(?:[.,\\s]\\d{3})+|\\d+)(?:[.,]\\d{1,2})?");
-    private static final Pattern CONTEXT = Pattern.compile("compra|pago|debit|spent|charged|retiro|abono|acredit|recib|deposit|transfer|monto|valor|total", Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
-    private static final Pattern CURRENCY_NEARBY = Pattern.compile("(?<![\\p{L}\\p{N}])(?:COP|USD|EUR|GBP|MXN|CAD|BRL)(?![\\p{L}\\p{N}])|US\\$|R\\$|[$€£]", Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
+    private static final Pattern CURRENCY_NEARBY = Pattern.compile("(?<![\\p{L}\\p{N}])(?:COP|USD|EUR|GBP|MXN|CAD|BRL|JPY|KRW|CLP|PYG|VND|CNY|INR|AUD|NZD|CHF|SGD|HKD|TRY)(?![\\p{L}\\p{N}])|US\\$|R\\$|[$\u20ac\u00a3\u20b9\u20a9\u20ba]", Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
 
     public DetectedCandidate parse(String appPackage, long postedAtMillis, String title, String text, String defaultCurrency) {
         String combined = joinNonBlank(title, text);
@@ -82,6 +113,11 @@ public final class NotificationCandidateParser {
         return score;
     }
 
+    private boolean hasDirectionSignal(String text) {
+        String normalized = normalize(text);
+        return score(normalized, EXPENSE) > 0 || score(normalized, INCOME) > 0;
+    }
+
     private ParsedMoney parseMoney(String text, String defaultCurrency) {
         String currency = detectCurrency(text, defaultCurrency);
         int exponent = ZERO_DECIMAL.contains(currency) ? 0 : 2;
@@ -96,7 +132,7 @@ public final class NotificationCandidateParser {
             int end = Math.min(text.length(), matcher.end() + 22);
             String context = text.substring(start, end);
             int score = CURRENCY_NEARBY.matcher(context).find() ? 5 : 0;
-            if (CONTEXT.matcher(context).find()) score += 3;
+            if (hasDirectionSignal(context)) score += 3;
             try {
                 long approximate = value.longValueExact();
                 if (approximate >= 1900 && approximate <= 2100 && !context.matches(".*[$€£].*")) score -= 5;
@@ -152,13 +188,15 @@ public final class NotificationCandidateParser {
 
     private String detectCurrency(String text, String fallback) {
         String upper = text.toUpperCase(Locale.ROOT);
-        if (containsCurrencyCode(text, "COP")) return "COP";
-        if (containsCurrencyCode(text, "USD") || upper.contains("US$")) return "USD";
-        if (containsCurrencyCode(text, "EUR") || text.contains("€")) return "EUR";
-        if (containsCurrencyCode(text, "GBP") || text.contains("£")) return "GBP";
-        if (containsCurrencyCode(text, "MXN")) return "MXN";
-        if (containsCurrencyCode(text, "CAD")) return "CAD";
-        if (containsCurrencyCode(text, "BRL") || upper.contains("R$")) return "BRL";
+        String[] codes = {"COP", "USD", "EUR", "GBP", "MXN", "CAD", "BRL", "JPY", "KRW", "CLP", "PYG", "VND", "CNY", "INR", "AUD", "NZD", "CHF", "SGD", "HKD", "TRY"};
+        for (String code : codes) if (containsCurrencyCode(text, code)) return code;
+        if (upper.contains("US$")) return "USD";
+        if (upper.contains("R$")) return "BRL";
+        if (text.contains("\u20ac")) return "EUR";
+        if (text.contains("\u00a3")) return "GBP";
+        if (text.contains("\u20b9")) return "INR";
+        if (text.contains("\u20a9")) return "KRW";
+        if (text.contains("\u20ba")) return "TRY";
         return fallback;
     }
 

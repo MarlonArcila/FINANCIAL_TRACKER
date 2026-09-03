@@ -83,7 +83,40 @@ public final class ParserSmokeTest {
         "com.bank", 1L, "Pago rechazado",
         "Compra fallida por $20.000", "COP") == null, "failed payment rejection");
 
-    System.out.println("Android parser smoke tests passed: 4");
+    DetectedCandidate capitalflowB = parser.parse(
+        "com.wallet", 1700000000000L, "PRUEBA CAPITALFLOW B",
+        "Transferencia recibida por COP 26491", "COP");
+    require(capitalflowB != null
+        && "income".equals(capitalflowB.proposedKind)
+        && capitalflowB.amountMinor == 26491L, "PRUEBA CAPITALFLOW B income");
+
+    DetectedCandidate englishMerchant = parser.parse(
+        "com.wallet", 1700000000000L, "SUCCESS TRANSACTION B",
+        "Your transaction was successful at NUCES for USD 20.00", "USD");
+    require(englishMerchant != null
+        && "expense".equals(englishMerchant.proposedKind)
+        && englishMerchant.amountMinor == 2000L, "English merchant transaction");
+
+    DetectedCandidate french = parser.parse(
+        "com.wallet", 1700000000000L, "Paiement effectue",
+        "Paiement effectue EUR 42,50 chez Boulangerie", "EUR");
+    require(french != null
+        && "expense".equals(french.proposedKind)
+        && french.amountMinor == 4250L, "French expense");
+
+    DetectedCandidate japanese = parser.parse(
+        "com.wallet", 1700000000000L, "\u5165\u91d1",
+        "\u5165\u91d1 JPY 5000", "JPY");
+    require(japanese != null
+        && "income".equals(japanese.proposedKind)
+        && japanese.amountMinor == 5000L, "Japanese income");
+
+    require(parser.parse(
+        "com.bank", 1L, "SUCCESS TRANSACTION",
+        "Your transaction was successful for USD 42.00", "USD") == null,
+        "ambiguous transaction must not invent direction");
+
+    System.out.println("Android parser smoke tests passed: 9");
   }
 
   private static void require(boolean condition, String label) {
@@ -92,5 +125,5 @@ public final class ParserSmokeTest {
 }
 JAVA
 
-javac -d "$work_dir/out" $(find "$work_dir/com" -name '*.java' -print)
+javac -encoding UTF-8 -d "$work_dir/out" $(find "$work_dir/com" -name '*.java' -print)
 java -cp "$work_dir/out" com.capitalflow.notification.ParserSmokeTest
