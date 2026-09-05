@@ -3,7 +3,7 @@ const read=(p)=>fs.readFileSync(p,"utf8");
 const must=(ok,msg)=>{if(!ok){console.error(`FAIL ${msg}`);process.exitCode=1;}else console.log(`PASS ${msg}`)};
 const migration=fs.readdirSync("supabase/migrations").filter((x)=>x.endsWith("_email_relay_multi_source_cloudflare_commercial_pilot.sql"));
 must(migration.length===1,"exactly one CLI-created multi-source relay migration");
-const sql=read(`supabase/migrations/${migration[0]}`); const gateway=read("supabase/functions/email-relay-ingest/index.ts"); const worker=read("workers/email-relay/src/index.mjs"); const parser=read("supabase/functions/_shared/financial-parser.ts"); const ui=read("apps/web/src/components/EmailRelayCard.tsx"); const wrangler=read("workers/email-relay/wrangler.jsonc");
+const sql=read(`supabase/migrations/${migration[0]}`); const gateway=read("supabase/functions/email-relay-ingest/index.ts"); const ingestion=read("supabase/functions/_shared/ingestion.ts"); const relayShared=read("supabase/functions/_shared/email-relay.ts"); const worker=read("workers/email-relay/src/index.mjs"); const parser=read("supabase/functions/_shared/financial-parser.ts"); const ui=read("apps/web/src/components/EmailRelayCard.tsx"); const wrangler=read("workers/email-relay/wrangler.jsonc");
 must(sql.includes("private.email_relay_aliases") && sql.includes("token_hash"),"primary alias token is hash-only in private schema");
 must(sql.includes("private.email_relay_sources") && sql.includes("'gmail','outlook','proton','other'"),"one alias can register Gmail Outlook Proton and other sources");
 must(!sql.includes("provider_preference"),"provider selection is no longer stored on the primary alias");
@@ -22,5 +22,8 @@ must(worker.includes("rawSize") && worker.includes("MAX_RAW_BYTES"),"worker enfo
 must(parser.includes('"email_relay"'),"existing multilingual parser accepts email_relay provider");
 must(ui.includes("Proton Mail") && ui.includes("misma direccion") && ui.includes("sources"),"onboarding supports many mail sources through one shared address");
 must(!sql.includes("raw_mime") && !sql.includes("raw_body"),"raw MIME is not persisted in database schema");
+must(gateway.includes("aliasId:alias.alias_id") && gateway.includes("sourceId") && gateway.includes("providerHint:sourceProvider"),"gateway passes relay source identity into semantic dedup");
+must(ingestion.includes("recipient_alias_id: sourceContext?.aliasId") && ingestion.includes("isDifferentRelaySource(previous,sourceContext)"),"candidate ingestion preserves alias/source lineage and dedups across relay sources");
+must(relayShared.includes("export function isDifferentRelaySource") && relayShared.includes("left.aliasId !== right.aliasId"),"relay semantic dedup is alias-scoped");
 must(/"workers_dev"\s*:\s*false/.test(wrangler) && /"preview_urls"\s*:\s*false/.test(wrangler) && !/"routes?"\s*:/.test(wrangler),"routing-only Email Worker disables workers.dev and preview URLs");
 if(process.exitCode) process.exit(process.exitCode);

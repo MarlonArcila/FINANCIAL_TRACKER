@@ -122,6 +122,21 @@ export function detectGmailForwardingConfirmation(subject: string | null, text: 
   return { url:safeUrl, code:codeMatch?.[1] ?? null };
 }
 
+export type RelaySourceIdentity = {
+  aliasId: string | null;
+  sourceId: string | null;
+  providerHint: string | null;
+};
+
+export function isDifferentRelaySource(left: RelaySourceIdentity, right: RelaySourceIdentity): boolean {
+  if (!left.aliasId || !right.aliasId || left.aliasId !== right.aliasId) return false;
+  if (left.sourceId && right.sourceId) return left.sourceId !== right.sourceId;
+  const a=(left.providerHint ?? "").trim().toLowerCase();
+  const b=(right.providerHint ?? "").trim().toLowerCase();
+  if (!a || !b || a === "other" || b === "other") return false;
+  return a !== b;
+}
+
 export function decodeBase64Bytes(value: string): Uint8Array {
   const binary=atob(value); const out=new Uint8Array(binary.length);
   for (let i=0;i<binary.length;i+=1) out[i]=binary.charCodeAt(i);
