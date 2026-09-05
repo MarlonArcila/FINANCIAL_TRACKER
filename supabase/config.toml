@@ -44,3 +44,9 @@ verify_jwt = false
 
 [functions.health-status]
 verify_jwt = false
+
+[functions.email-relay-settings]
+verify_jwt = false
+
+[functions.email-relay-ingest]
+verify_jwt = false

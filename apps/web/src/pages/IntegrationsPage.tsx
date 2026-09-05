@@ -15,6 +15,7 @@ import {
 } from "../lib/notificationAccess";
 import type { AppUser, SourceConnection } from "../lib/types";
 
+import { EmailRelayCard } from "../components/EmailRelayCard";
 export function IntegrationsPage({ user }: { user: AppUser }) {
   const nativeAndroid = isAndroidNative();
   const [permission, setPermission] = useState(false);
@@ -145,6 +146,7 @@ export function IntegrationsPage({ user }: { user: AppUser }) {
       {message ? <Notice tone="success">{message}</Notice> : null}
       {error ? <Notice tone="danger">{error}</Notice> : null}
       <div className="integration-grid">
+        <EmailRelayCard />
         <article className="integration-card">
           <div className="integration-icon">A</div>
           <div><span className="eyebrow">ANDROID</span><h2>Notificaciones del dispositivo</h2></div>

@@ -60,7 +60,7 @@ export interface Transaction {
   merchant: string | null;
   description: string | null;
   occurred_at: string;
-  source: "manual" | "android_notification" | "gmail" | "system" | "import_file";
+  source: "manual" | "android_notification" | "gmail" | "email_relay" | "system" | "import_file";
   auto_posted?: boolean;
   created_at: string;
 }
@@ -113,7 +113,7 @@ export interface Investment {
 
 export interface SourceConnection {
   id: string;
-  provider: "gmail";
+  provider: "gmail" | "email_relay";
   email_address: string | null;
   status: "active" | "expired" | "revoked" | "error" | "pending";
   last_sync_at: string | null;

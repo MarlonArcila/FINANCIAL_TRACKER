@@ -8,7 +8,7 @@ export type TransactionKind =
   | "adjustment";
 
 export type CandidateKind = "income" | "expense";
-export type CandidateProvider = "android_notification" | "gmail";
+export type CandidateProvider = "android_notification" | "gmail" | "email_relay";
 export type RiskTolerance = "low" | "medium" | "high";
 
 export interface ParsedMoney {

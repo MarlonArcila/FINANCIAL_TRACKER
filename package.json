@@ -36,7 +36,8 @@
     "pilot:android-device": "bash scripts/pilot-android-device-e2e.sh",
     "pilot:legal": "node scripts/pilot-legal-privacy.mjs",
     "android:distribution": "bash scripts/build-android-distribution-artifacts.sh",
-    "test:android-distribution": "node scripts/assert-android-distribution-whop-automation.mjs"
+    "test:android-distribution": "node scripts/assert-android-distribution-whop-automation.mjs",
+    "test:email-relay": "node --test workers/email-relay/email-worker.test.mjs && deno test --no-lock supabase/functions/_shared/email-relay.test.ts && node scripts/assert-email-relay-commercial-pilot.mjs"
   },
   "engines": {
     "node": ">=22.12.0"
