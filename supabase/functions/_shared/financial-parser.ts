@@ -1,6 +1,6 @@
 import { sha256Base64Url } from "./crypto.ts";
 
-export type Provider = "android_notification" | "gmail";
+export type Provider = "android_notification" | "gmail" | "email_relay";
 export type CandidateKind = "income" | "expense";
 
 export interface ParsedCandidate {
@@ -74,7 +74,7 @@ const NOISE = /otp|one[- ]time password|c[oó]digo de verificaci[oó]n|clave din
 const FAILURE = /fallid[oa]|rechazad[oa]|declined|failed|cancelad[oa]/iu;
 
 export async function parseMailMessage(input: {
-  provider: "gmail";
+  provider: "gmail" | "email_relay";
   externalId: string;
   occurredAt: string;
   sender: string | null;
@@ -90,7 +90,10 @@ export async function parseMailMessage(input: {
   if (!money) return null;
   const direction = classify(normalized);
   if (!direction) return null;
-  const merchant = inferMerchant(input.text, input.title, input.sender);
+  const inferredMerchant = inferMerchant(input.text, input.title, input.sender);
+  const merchant = input.provider === "email_relay" && isGenericRelayMerchant(inferredMerchant)
+    ? null
+    : inferredMerchant;
   const description = sanitize([input.title, input.text].filter(Boolean).join(" — ")) || null;
   const occurredAt = normalizeDate(input.occurredAt);
   const confidence = Math.min(0.99, 0.45 + money.confidence * 0.3 + direction.confidence * 0.22 + (merchant ? 0.03 : 0));
@@ -241,6 +244,13 @@ function classify(normalized: string): { kind: CandidateKind; confidence: number
   const income = INCOME.filter((word) => normalized.includes(normalize(word))).length;
   if (expense === income) return null;
   return { kind: expense > income ? "expense" : "income", confidence: Math.min(1, 0.65 + Math.abs(expense - income) * 0.1) };
+}
+
+function isGenericRelayMerchant(value: string | null): boolean {
+  if (!value) return false;
+  const label = normalize(value).trim();
+  if (label === "banco" || label === "bank") return true;
+  return EXPENSE.some((word) => label === normalize(word)) || INCOME.some((word) => label === normalize(word));
 }
 
 function inferMerchant(text: string, title: string | null, sender: string | null): string | null {

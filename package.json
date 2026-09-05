@@ -10,12 +10,12 @@
   "scripts": {
     "dev": "npm run dev -w @capitalflow/web",
     "build": "npm run build -w @capitalflow/core && npm run build -w @capitalflow/web",
-    "test": "npm run test -w @capitalflow/core && npm run test:edge-parser && npm run test:private-boundary && npm run test:rate-limit-boundary && npm run test:retention-boundary && npm run test:t13-boundary && npm run test:pilot-external-tooling",
+    "test": "npm run test -w @capitalflow/core && npm run test:edge-parser && npm run test:email-relay && npm run test:private-boundary && npm run test:rate-limit-boundary && npm run test:retention-boundary && npm run test:t13-boundary && npm run test:pilot-external-tooling",
     "test:native": "bash scripts/test-android-parser.sh",
     "test:all": "npm test && npm run test:native",
     "typecheck": "npm run typecheck -w @capitalflow/core && npm run typecheck -w @capitalflow/web",
     "clean": "npm run clean -w @capitalflow/core && npm run clean -w @capitalflow/web",
-    "test:edge-parser": "node --experimental-strip-types --test supabase/functions/_shared/*.test.ts",
+    "test:edge-parser": "node scripts/run-node-edge-tests.mjs",
     "test:private-boundary": "node scripts/assert-edge-private-boundary.mjs",
     "test:rate-limit-boundary": "node scripts/assert-edge-rate-limit-boundary.mjs",
     "test:retention-boundary": "node scripts/assert-retention-purge-boundary.mjs",
@@ -36,7 +36,8 @@
     "pilot:android-device": "bash scripts/pilot-android-device-e2e.sh",
     "pilot:legal": "node scripts/pilot-legal-privacy.mjs",
     "android:distribution": "bash scripts/build-android-distribution-artifacts.sh",
-    "test:android-distribution": "node scripts/assert-android-distribution-whop-automation.mjs"
+    "test:android-distribution": "node scripts/assert-android-distribution-whop-automation.mjs",
+    "test:email-relay": "node --test workers/email-relay/email-worker.test.mjs && deno test --no-lock supabase/functions/_shared/email-relay.test.ts && node scripts/assert-email-relay-commercial-pilot.mjs"
   },
   "engines": {
     "node": ">=22.12.0"
