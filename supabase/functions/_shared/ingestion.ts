@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "npm:@supabase/supabase-js@2";
 
 import type { ParsedCandidate } from "./financial-parser.ts";
+import { isDifferentRelaySource, type RelaySourceIdentity } from "./email-relay.ts";
 import { applyCandidateAutomation, type AutomationResult } from "./automation.ts";
 
 export interface IngestResult {
@@ -10,11 +11,14 @@ export interface IngestResult {
   automation: AutomationResult | null;
 }
 
+export interface IngestionSourceContext extends RelaySourceIdentity {}
+
 export async function ingestCandidate(
   service: SupabaseClient,
   userId: string,
   candidate: ParsedCandidate,
   connectionId: string | null = null,
+  sourceContext: IngestionSourceContext | null = null,
 ): Promise<IngestResult> {
   const { data: existing, error: existingError } = await service
     .from("transaction_candidates")
@@ -31,7 +35,7 @@ export async function ingestCandidate(
   const windowEnd = new Date(occurred + 15 * 60_000).toISOString();
   const { data: nearby, error: crossError } = await service
     .from("transaction_candidates")
-    .select("id,merchant,provider")
+    .select("id,merchant,provider,source_event_id")
     .eq("user_id", userId)
     .eq("proposed_kind", candidate.proposedKind)
     .eq("amount_minor", candidate.amountMinor)
@@ -42,7 +46,31 @@ export async function ingestCandidate(
     .order("occurred_at", { ascending: false })
     .limit(10);
   if (crossError) throw crossError;
-  const crossSource = (nearby ?? []).find((item) => item.provider !== candidate.provider && merchantsCompatible(item.merchant, candidate.merchant)) ?? null;
+
+  const relayEventIds=(nearby ?? [])
+    .filter((item)=>item.provider === "email_relay" && item.source_event_id)
+    .map((item)=>String(item.source_event_id));
+  const relayIdentityByEvent=new Map<string,RelaySourceIdentity>();
+  if (candidate.provider === "email_relay" && sourceContext && relayEventIds.length) {
+    const {data:relayEvents,error:relayEventsError}=await service.from("source_events")
+      .select("id,recipient_alias_id,recipient_source_id,forwarding_provider_hint")
+      .in("id",relayEventIds);
+    if (relayEventsError) throw relayEventsError;
+    for (const row of relayEvents ?? []) {
+      relayIdentityByEvent.set(String(row.id),{
+        aliasId: row.recipient_alias_id ? String(row.recipient_alias_id) : null,
+        sourceId: row.recipient_source_id ? String(row.recipient_source_id) : null,
+        providerHint: row.forwarding_provider_hint ? String(row.forwarding_provider_hint) : null,
+      });
+    }
+  }
+  const crossSource=(nearby ?? []).find((item)=>{
+    if (!merchantsCompatible(item.merchant,candidate.merchant)) return false;
+    if (item.provider !== candidate.provider) return true;
+    if (candidate.provider !== "email_relay" || !sourceContext || !item.source_event_id) return false;
+    const previous=relayIdentityByEvent.get(String(item.source_event_id));
+    return previous ? isDifferentRelaySource(previous,sourceContext) : false;
+  }) ?? null;
 
   const sourcePayload = {
     user_id: userId,
@@ -56,6 +84,9 @@ export async function ingestCandidate(
     text_sanitized: candidate.description,
     fingerprint: candidate.fingerprint,
     metadata: { parser_version: candidate.parserVersion },
+    recipient_alias_id: sourceContext?.aliasId ?? null,
+    recipient_source_id: sourceContext?.sourceId ?? null,
+    forwarding_provider_hint: sourceContext?.providerHint ?? null,
     processing_status: "parsed",
   };
   const { data: source, error: sourceError } = await service

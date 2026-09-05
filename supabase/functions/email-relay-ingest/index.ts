@@ -8,7 +8,20 @@ import { assertEntitled, createServiceClient } from "../_shared/supabase.ts";
 
 type SourceProvider="gmail"|"outlook"|"proton"|"other";
 type RelayPayload={recipient?:unknown;envelopeSender?:unknown;from?:unknown;messageId?:unknown;date?:unknown;subject?:unknown;receivedAt?:unknown;rawSha256?:unknown;rawMimeBase64?:unknown;authentication?:unknown;forwardingProviderHint?:unknown};
+type RelayAliasRow={alias_id:string;user_id:string;connection_id:string};
+type RelaySourceMatchRow={source_id:string|null;match_status:string};
 function record(value:unknown):Record<string,unknown>{return value && typeof value==="object" && !Array.isArray(value)?value as Record<string,unknown>:{};}
+function relayAliasRow(value:unknown):RelayAliasRow {
+  const row=record(value);
+  if(typeof row.alias_id!=="string"||typeof row.user_id!=="string"||typeof row.connection_id!=="string") throw new HttpError(500,"relay_alias_contract_invalid");
+  return {alias_id:row.alias_id,user_id:row.user_id,connection_id:row.connection_id};
+}
+function relaySourceMatchRow(value:unknown):RelaySourceMatchRow {
+  const row=record(value);
+  const sourceId=typeof row.source_id==="string"?row.source_id:null;
+  const matchStatus=typeof row.match_status==="string"?row.match_status:"unknown";
+  return {source_id:sourceId,match_status:matchStatus};
+}
 function providerHint(value:unknown):SourceProvider{return value==="gmail"||value==="outlook"||value==="proton"||value==="other"?value:"other";}
 
 Deno.serve(async(request)=>{
@@ -29,12 +42,14 @@ Deno.serve(async(request)=>{
     let body:RelayPayload; try { body=JSON.parse(rawBody) as RelayPayload; } catch { throw new HttpError(400,"invalid_json"); }
     const recipient=sanitizeRelayHeader(body.recipient,320); if (!recipient) throw new HttpError(422,"missing_recipient");
     const domain=requiredEnv("CAPITALFLOW_EMAIL_RELAY_DOMAIN"); const rawToken=extractAliasToken(recipient,domain); const tokenHash=await sha256Base64Url(rawToken);
-    const {data:alias,error:aliasError}=await service.rpc("service_resolve_email_relay_alias",{p_token_hash:tokenHash}).maybeSingle();
-    if (aliasError) throw aliasError; if (!alias) throw new HttpError(404,"relay_alias_not_found");
+    const {data:aliasData,error:aliasError}=await service.rpc("service_resolve_email_relay_alias",{p_token_hash:tokenHash}).maybeSingle();
+    if (aliasError) throw aliasError; if (!aliasData) throw new HttpError(404,"relay_alias_not_found");
+    const alias=relayAliasRow(aliasData);
     const sourceProvider=providerHint(body.forwardingProviderHint);
-    const {data:sourceMatch,error:sourceMatchError}=await service.rpc("service_match_email_relay_source",{p_alias_id:alias.alias_id,p_provider:sourceProvider}).single();
+    const {data:sourceMatchData,error:sourceMatchError}=await service.rpc("service_match_email_relay_source",{p_alias_id:alias.alias_id,p_provider:sourceProvider}).single();
     if(sourceMatchError) throw sourceMatchError;
-    let sourceId:string|null=sourceMatch?.source_id ?? null;
+    const sourceMatch=relaySourceMatchRow(sourceMatchData);
+    let sourceId:string|null=sourceMatch.source_id;
     const {data:allowed,error:rateError}=await service.rpc("service_take_email_relay_rate_limit",{p_alias_id:alias.alias_id,p_limit:30,p_window_seconds:600});
     if (rateError) throw rateError; if (!allowed) throw new HttpError(429,"relay_rate_limited");
 
@@ -70,9 +85,10 @@ Deno.serve(async(request)=>{
 
     const verification=detectGmailForwardingConfirmation(subject,text);
     if (verification) {
-      const {data:gmailMatch,error:gmailMatchError}=await service.rpc("service_match_email_relay_source",{p_alias_id:alias.alias_id,p_provider:"gmail"}).single();
+      const {data:gmailMatchData,error:gmailMatchError}=await service.rpc("service_match_email_relay_source",{p_alias_id:alias.alias_id,p_provider:"gmail"}).single();
       if(gmailMatchError) throw gmailMatchError;
-      sourceId=gmailMatch?.source_id ?? (sourceProvider==="gmail"?sourceId:null);
+      const gmailMatch=relaySourceMatchRow(gmailMatchData);
+      sourceId=gmailMatch.source_id ?? (sourceProvider==="gmail"?sourceId:null);
       await service.from("source_events").update({processing_status:"ignored",processing_error:null,recipient_source_id:sourceId,forwarding_provider_hint:"gmail",metadata:{...metadata,event_type:"gmail_forwarding_confirmation",forwarding_provider_hint:"gmail",source_match_status:gmailMatch?.match_status ?? "unknown"}}).eq("id",source.id);
       const {error}=await service.rpc("service_update_email_relay_state",{p_alias_id:alias.alias_id,p_source_id:sourceId,p_provider_hint:"gmail",p_status:"pending",p_financial:false,p_gmail_url:verification.url,p_gmail_code:verification.code}); if (error) throw error;
       return json({accepted:true,verification:"gmail_forwarding",financial:false},202);
@@ -93,7 +109,7 @@ Deno.serve(async(request)=>{
       return json({accepted:true,financial:false},202);
     }
     parsed.fingerprint=fingerprint;
-    const result=await ingestCandidate(service,alias.user_id,parsed,alias.connection_id);
+    const result=await ingestCandidate(service,alias.user_id,parsed,alias.connection_id,{aliasId:alias.alias_id,sourceId,providerHint:sourceProvider});
     await service.from("source_events").update({
       recipient_alias_id:alias.alias_id,recipient_source_id:sourceId,forwarding_provider_hint:sourceProvider,message_id:messageId,received_at:receivedAt,raw_sha256:computedHash,
       parser_version:parsed.parserVersion,parser_rule_version:parsed.parserVersion,detected_amount_minor:parsed.amountMinor,detected_currency:parsed.currency,

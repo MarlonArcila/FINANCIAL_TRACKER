@@ -1,5 +1,5 @@
 import { assertEquals, assertRejects } from "jsr:@std/assert@1";
-import { detectGmailForwardingConfirmation, extractAliasToken, extractTextFromMime, verifyRelaySignature } from "./email-relay.ts";
+import { detectGmailForwardingConfirmation, extractAliasToken, extractTextFromMime, isDifferentRelaySource, verifyRelaySignature } from "./email-relay.ts";
 import { parseMailMessage } from "./financial-parser.ts";
 
 Deno.test("email relay extracts high entropy plus alias", () => {
@@ -40,4 +40,17 @@ Deno.test("non-financial relay mail is ignored by the existing parser", async ()
 Deno.test("lower-confidence financial relay remains eligible for review instead of forced auto-post", async () => {
   const candidate=await parseMailMessage({provider:"email_relay",externalId:"relay-review-1",occurredAt:"2026-09-04T17:00:00.000Z",sender:"Banco",title:"Compra",text:"Compra COP 42.000",defaultCurrency:"COP"});
   assertEquals(Boolean(candidate && candidate.confidence >= 0.70 && candidate.confidence < 0.94),true);
+});
+
+Deno.test("relay semantic dedup distinguishes Gmail and Outlook on one alias", () => {
+  assertEquals(isDifferentRelaySource({aliasId:"a",sourceId:"gmail-1",providerHint:"gmail"},{aliasId:"a",sourceId:"outlook-1",providerHint:"outlook"}),true);
+});
+Deno.test("relay semantic dedup does not classify the same relay source as cross-source", () => {
+  assertEquals(isDifferentRelaySource({aliasId:"a",sourceId:"gmail-1",providerHint:"gmail"},{aliasId:"a",sourceId:"gmail-1",providerHint:"outlook"}),false);
+});
+Deno.test("relay semantic dedup falls back to provider hint when source id is unavailable", () => {
+  assertEquals(isDifferentRelaySource({aliasId:"a",sourceId:null,providerHint:"gmail"},{aliasId:"a",sourceId:null,providerHint:"outlook"}),true);
+});
+Deno.test("relay semantic dedup never crosses alias boundaries", () => {
+  assertEquals(isDifferentRelaySource({aliasId:"a",sourceId:"gmail-1",providerHint:"gmail"},{aliasId:"b",sourceId:"outlook-1",providerHint:"outlook"}),false);
 });
