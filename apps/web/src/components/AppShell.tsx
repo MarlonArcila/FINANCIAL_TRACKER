@@ -54,6 +54,11 @@ export function AppShell({
         </nav>
         <div className="sidebar-footer">
           <button type="button" className="plan-chip" onClick={() => navigate("subscription")}>Plan activo</button>
+          <nav className="sidebar-legal-links" aria-label="Documentos legales">
+            <a href="/privacy/" target="_blank" rel="noreferrer">Privacidad</a>
+            <a href="/terms/" target="_blank" rel="noreferrer">Términos</a>
+            <a href="/cookies/" target="_blank" rel="noreferrer">Cookies</a>
+          </nav>
           <div className="user-row">
             <div className="avatar">{(user.email?.[0] ?? "U").toUpperCase()}</div>
             <div>
@@ -101,3 +106,4 @@ export function AppShell({
     </div>
   );
 }
+

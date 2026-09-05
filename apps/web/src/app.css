@@ -576,3 +576,34 @@ td strong, td small { display: block; }
   .selected-category-summary { align-items: stretch; flex-direction: column; }
   .selected-category-actions { justify-content: flex-start; }
 }
+
+
+/* Public legal links and explicit 18+ account consent */
+.legal-consent {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: .65rem;
+  color: var(--muted);
+  font-size: .78rem;
+  line-height: 1.45;
+}
+.legal-consent input { margin-top: .22rem; }
+.legal-consent a,
+.auth-legal-links a,
+.sidebar-legal-links a { color: var(--brand-dark); }
+.auth-legal-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .4rem .75rem;
+  margin-top: 1.1rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--line);
+  font-size: .76rem;
+}
+.sidebar-legal-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .35rem .6rem;
+  font-size: .68rem;
+}
