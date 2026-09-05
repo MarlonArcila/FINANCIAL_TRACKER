@@ -30,9 +30,9 @@ if (!driveE2e.includes("DRIVE_AUTHORIZATION_URL_MISSING_APPDATA_SCOPE")) throw n
 const corsRuntime = fs.readFileSync("scripts/pilot-cors-runtime-release.sh", "utf8");
 if (corsRuntime.includes("awk -F':'")) throw new Error("CORS_RUNTIME_HTTPS_HEADER_TRUNCATION_PRESENT");
 if (!corsRuntime.includes('index($0, ":")')) throw new Error("CORS_RUNTIME_FIRST_COLON_PARSER_MISSING");
-const vercelConfig = JSON.parse(fs.readFileSync("apps/web/vercel.json", "utf8"));
-if (vercelConfig.installCommand !== "cd ../.. && npm ci") throw new Error("VERCEL_MONOREPO_ROOT_INSTALL_COMMAND_MISSING");
-if (vercelConfig.buildCommand !== "cd ../.. && npm run build -w @capitalflow/core && npm run build -w @capitalflow/web") throw new Error("VERCEL_MONOREPO_ROOT_BUILD_COMMAND_MISSING");
-if (vercelConfig.outputDirectory !== "dist") throw new Error("VERCEL_WEB_OUTPUT_DIRECTORY_INVALID");
-console.log("VERCEL_MONOREPO_WORKSPACE_INSTALL_BOUNDARY=GREEN");
+const vercelConfig = JSON.parse(fs.readFileSync("vercel.json", "utf8"));
+if (vercelConfig.installCommand !== "npm ci") throw new Error("VERCEL_REPOSITORY_ROOT_INSTALL_COMMAND_MISSING");
+if (vercelConfig.buildCommand !== "npm run build") throw new Error("VERCEL_REPOSITORY_ROOT_BUILD_COMMAND_MISSING");
+if (vercelConfig.outputDirectory !== "apps/web/dist") throw new Error("VERCEL_WEB_OUTPUT_DIRECTORY_INVALID");
+console.log("VERCEL_REPOSITORY_ROOT_DEPLOY_BOUNDARY=GREEN");
 console.log("PILOT_EXTERNAL_TOOLING_BOUNDARY=GREEN");
