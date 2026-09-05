@@ -6,5 +6,7 @@
   "vars": {
     "CAPITALFLOW_EMAIL_RELAY_DOMAIN": "ingest.capitalflow.eu.cc",
     "CAPITALFLOW_EMAIL_RELAY_BACKEND_URL": "https://xxmbqbnryhvybhlwivgq.supabase.co/functions/v1/email-relay-ingest"
-  }
+  },
+  "workers_dev": false,
+  "preview_urls": false
 }
