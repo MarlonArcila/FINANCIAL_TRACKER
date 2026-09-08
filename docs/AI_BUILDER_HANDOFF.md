@@ -124,3 +124,7 @@ La salida no es aceptable si:
 - Nunca incluyas suscripción, OAuth tokens, secretos o correo crudo en `capitalflow-backup-v2`.
 - Nunca restaures antes de: checksum válido → backup `pre_restore` → confirmación `RESTAURAR`.
 - Un tercer proveedor (Dropbox/WebDAV/S3-compatible) debe añadirse detrás del adaptador de almacenamiento, sin cambiar el formato financiero del backup.
+
+### Financial Sources rule
+
+The active visible surface is **Fuentes Financieras** and Email Relay only. Preserve one-time full alias reveal, the private provider-neutral forwarding-verification inbox, seven-day maximum actionable-secret retention, and Gmail-only allowlisted HTTPS verification links. Do not resurrect Gmail OAuth or make global mailbox forwarding the recommended setup.

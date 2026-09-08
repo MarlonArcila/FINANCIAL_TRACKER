@@ -83,3 +83,13 @@ Authenticated release-workstation doctor:
 ```bash
 npm run doctor:release
 ```
+
+## 8. Financial Sources and forwarding verification
+
+The visible section name is **Fuentes Financieras**. Its sole active user-facing mail integration remains the automatic Email Relay; this does not reactivate Gmail OAuth, Microsoft Graph, or Android ingestion.
+
+A relay alias uses a high-entropy token that is stored only as a hash. The full `cf+…@ingest.capitalflow.eu.cc` address is returned only by create/rotate and shown in memory once. Later state responses expose only the alias hint. Verification URLs, codes, and excerpts are temporary setup material: the private forwarding-verification inbox retains actionable material for at most seven days and clears it on resolution, dismissal, expiration, alias revocation, or source revocation.
+
+The inbox is provider-neutral (`gmail`, `outlook`, `proton`, `other`), but only Gmail has a currently verified detector. Gmail links are actionable only after HTTPS and Google-owned-host allowlisting; no arbitrary mail link or mail HTML is rendered. A confirmation is an ignored non-financial source event and never enters the parser/candidate/transaction pipeline. Future providers require documented behavior or captured fixtures before adding a detector.
+
+When this surface changes, release in compatibility order: merge additive migration, apply it to the linked production project, deploy only changed `email-relay-ingest` and `email-relay-settings` functions, smoke their authenticated/runtime boundary, then deploy the exact merged `main` SHA to the canonical Vercel project. The Gmail forwarding guide must continue to recommend a verified address plus a financial-only Gmail filter, never global forwarding of a whole mailbox.
