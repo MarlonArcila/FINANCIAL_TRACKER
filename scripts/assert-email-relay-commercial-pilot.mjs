@@ -24,6 +24,7 @@ const parser = read("supabase/functions/_shared/financial-parser.ts");
 const ui = read("apps/web/src/components/EmailRelayCard.tsx");
 const wrangler = read("workers/email-relay/wrangler.jsonc");
 const integrations = read("apps/web/src/pages/IntegrationsPage.tsx");
+const release = read("docs/RELEASE_CONTRACT.md");
 must(
   sql.includes("private.email_relay_aliases") && sql.includes("token_hash"),
   "primary alias token is hash-only in private schema",
@@ -138,6 +139,12 @@ must(
   "routing-only Email Worker disables workers.dev and preview URLs",
 );
 must(
+  release.includes("subaddressing enabled") &&
+    release.includes("capitalflow-email-relay") &&
+    release.includes("cf@ingest.capitalflow.eu.cc"),
+  "release contract requires ready Email Routing, subaddressing, and the relay worker route",
+);
+must(
   integrations.includes("<EmailRelayCard />"),
   "integrations page exposes the automatic financial email relay",
 );
@@ -181,15 +188,20 @@ if (inboxMigration) {
     "verification mutations enforce owner isolation",
   );
   must(
-    inboxSql.indexOf("create or replace function public.service_list_email_relay_forwarding_verifications") <
-      inboxSql.indexOf("revoke all on function public.service_purge_email_relay_verifications"),
+    inboxSql.indexOf(
+      "create or replace function public.service_list_email_relay_forwarding_verifications",
+    ) <
+      inboxSql.indexOf(
+        "revoke all on function public.service_purge_email_relay_verifications",
+      ),
     "verification RPC permissions are declared after their functions",
   );
 }
 must(
   relayShared.includes("detectForwardingVerification") &&
-    relayShared.includes('hostname.endsWith(".google.com")') &&
-    relayShared.includes('u.protocol === "https:"'),
+    relayShared.includes("allowed(provider") &&
+    relayShared.includes('u.protocol === "https:"') &&
+    relayShared.includes("protonmail.com"),
   "generic detector only permits HTTPS Google verification links",
 );
 must(
@@ -200,7 +212,7 @@ must(
 );
 must(
   ui.includes("Verificaciones de reenvío") &&
-    ui.includes("Abrir verificación") &&
+    ui.includes("Aprobar vinculación") &&
     ui.includes('rel="noreferrer noopener"'),
   "UI renders an owner-scoped safe verification inbox",
 );
@@ -209,6 +221,19 @@ must(
     ui.includes("¿Perdiste la dirección completa?") &&
     ui.includes("Rotar dirección"),
   "UI preserves one-time alias reveal and recovery flow",
+);
+must(
+  ui.includes("Vincular Gmail") &&
+    ui.includes("Vincular Outlook") &&
+    ui.includes("Vincular Proton Mail") &&
+    ui.includes("setup-assistant"),
+  "UI provides provider-aware linking actions and an interactive setup assistant",
+);
+must(
+  ui.includes('window.addEventListener("focus"') &&
+    ui.includes("waiting") &&
+    ui.includes("10000"),
+  "pending sources poll even without verification rows and refresh on return",
 );
 must(
   ui.includes("Configuración del reenvío") &&

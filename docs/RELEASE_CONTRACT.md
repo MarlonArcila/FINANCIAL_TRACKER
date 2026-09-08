@@ -93,3 +93,7 @@ A relay alias uses a high-entropy token that is stored only as a hash. The full 
 The inbox is provider-neutral (`gmail`, `outlook`, `proton`, `other`), but only Gmail has a currently verified detector. Gmail links are actionable only after HTTPS and Google-owned-host allowlisting; no arbitrary mail link or mail HTML is rendered. A confirmation is an ignored non-financial source event and never enters the parser/candidate/transaction pipeline. Future providers require documented behavior or captured fixtures before adding a detector.
 
 When this surface changes, release in compatibility order: merge additive migration, apply it to the linked production project, deploy only changed `email-relay-ingest` and `email-relay-settings` functions, smoke their authenticated/runtime boundary, then deploy the exact merged `main` SHA to the canonical Vercel project. The Gmail forwarding guide must continue to recommend a verified address plus a financial-only Gmail filter, never global forwarding of a whole mailbox.
+
+## 9. Email Routing prerequisite
+
+The relay contract requires Cloudflare Email Routing to be enabled and ready for `ingest.capitalflow.eu.cc`, with subaddressing enabled, and a `cf@ingest.capitalflow.eu.cc` routing rule targeting `capitalflow-email-relay`. The worker must preserve the `cf+TOKEN` recipient detail without logging it. The authenticated release doctor/operator must verify these live facts before a real forwarding UAT; static CI verifies this contract but never stores Cloudflare credentials.

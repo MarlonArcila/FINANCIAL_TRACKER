@@ -28,6 +28,12 @@ type Verification = {
   sender: string | null;
   subject: string | null;
   excerpt: string | null;
+  action?: {
+    kind: "safe_url" | "code" | "safe_url_and_code" | "instructions_only";
+    label: string;
+    url?: string;
+    code?: string;
+  };
   verificationUrl: string | null;
   verificationCode: string | null;
   receivedAt: string;
@@ -58,33 +64,39 @@ const providerNames: Record<SourceProvider, string> = {
 const guide = [
   [
     "Abre Gmail en un computador y haz clic en el ícono de Configuración (la tuerca) de la esquina superior derecha.",
-    "step-settings.svg",
+    "forwarding-01-settings.svg",
   ],
-  ["Haz clic en «Ver toda la configuración».", "step-see-all-settings.svg"],
-  ["Abre la pestaña «Reenvío y correo POP/IMAP».", "step-forwarding-tab.svg"],
+  [
+    "Haz clic en «Ver toda la configuración».",
+    "forwarding-02-see-all-settings.svg",
+  ],
+  [
+    "Abre la pestaña «Reenvío y correo POP/IMAP».",
+    "forwarding-03-forwarding-tab.svg",
+  ],
   [
     "En la sección Reenvío, haz clic en «Agregar una dirección de reenvío».",
-    "step-add-forwarding-address.svg",
+    "forwarding-04-add-address.svg",
   ],
   [
     "Pega tu dirección privada de CapitalFlow, que termina en @ingest.capitalflow.eu.cc, y continúa.",
-    "step-enter-capitalflow-address.svg",
+    "forwarding-05-enter-address.svg",
   ],
   [
     "Gmail enviará un mensaje de verificación. CapitalFlow lo detectará y lo mostrará aquí.",
-    "step-verification-inbox.svg",
+    "forwarding-06-verification-sent.svg",
   ],
   [
     "Cuando aparezca la verificación, abre el enlace seguro o copia el código y completa la confirmación de Gmail.",
-    "step-verification-inbox.svg",
+    "forwarding-06-verification-sent.svg",
   ],
   [
     "Regresa a Gmail y actualiza la configuración si es necesario.",
-    "step-forwarding-tab.svg",
+    "forwarding-03-forwarding-tab.svg",
   ],
   [
     "No actives el reenvío global de todos los correos: usa el filtro financiero sugerido más abajo.",
-    "filter-forward-action.svg",
+    "filter-04-forward-to.svg",
   ],
 ];
 export function EmailRelayCard() {
@@ -97,6 +109,7 @@ export function EmailRelayCard() {
   const [selected, setSelected] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [setupStep, setSetupStep] = useState(1);
   const load = async () => {
     try {
       const data = await invokeFunction<RelayResponse>("email-relay-settings", {
@@ -115,11 +128,24 @@ export function EmailRelayCard() {
   useEffect(() => {
     void load();
   }, []);
+  const waiting =
+    state.state === "VERIFICATION_PENDING" ||
+    Boolean(
+      state.sources?.some((source) => source.state === "VERIFICATION_PENDING"),
+    ) ||
+    Boolean(state.verifications?.length);
   useEffect(() => {
-    if (!state.verifications?.length) return;
-    const id = window.setInterval(() => void load(), 15000);
-    return () => window.clearInterval(id);
-  }, [state.verifications?.length]);
+    if (!waiting) return;
+    const refresh = () => void load();
+    const id = window.setInterval(refresh, 10000);
+    window.addEventListener("focus", refresh);
+    document.addEventListener("visibilitychange", refresh);
+    return () => {
+      window.clearInterval(id);
+      window.removeEventListener("focus", refresh);
+      document.removeEventListener("visibilitychange", refresh);
+    };
+  }, [waiting]);
   const domains = useMemo(
     () => [
       ...new Set(
@@ -296,6 +322,28 @@ export function EmailRelayCard() {
                         )}
                       </small>
                     ) : null}
+                    {state.verifications
+                      ?.filter(
+                        (verification) =>
+                          verification.sourceId === source.id &&
+                          verification.verificationUrl,
+                      )
+                      .map((verification) => (
+                        <a
+                          key={verification.id}
+                          className="primary-button"
+                          href={verification.verificationUrl!}
+                          target="_blank"
+                          rel="noreferrer noopener"
+                          onClick={() =>
+                            void act("mark_verification_opened", {
+                              verificationId: verification.id,
+                            })
+                          }
+                        >
+                          Aprobar vinculación
+                        </a>
+                      ))}
                   </div>
                   <button
                     className="ghost-danger"
@@ -354,7 +402,7 @@ export function EmailRelayCard() {
                       })
                     }
                   >
-                    Abrir verificación
+                    Aprobar vinculación
                   </a>
                 ) : null}
                 {v.verificationCode ? (
@@ -369,11 +417,9 @@ export function EmailRelayCard() {
                 <button
                   className="secondary-button"
                   type="button"
-                  onClick={() =>
-                    void act("resolve_verification", { verificationId: v.id })
-                  }
+                  onClick={() => void load()}
                 >
-                  Ya confirmé el reenvío
+                  Ya lo confirmé — comprobar estado
                 </button>
                 <button
                   className="ghost-danger"
@@ -390,7 +436,103 @@ export function EmailRelayCard() {
         </section>
       ) : null}
       {state.aliasHint || state.address ? (
-        <section className="relay-section">
+        <section
+          className="relay-section setup-assistant"
+          aria-label="Asistente de vinculación"
+        >
+          <p className="eyebrow">Paso {setupStep} de 5</p>
+          <h3>
+            {setupStep === 1
+              ? "Vincula tu correo"
+              : setupStep === 2
+                ? "Configura el reenvío"
+                : setupStep === 3
+                  ? "Esperando confirmación"
+                  : setupStep === 4
+                    ? "Comprueba el primer reenvío"
+                    : "Vinculación completada"}
+          </h3>
+          <p>
+            {provider === "gmail"
+              ? "CapitalFlow recibirá únicamente los mensajes que tú decidas reenviar. No solicitaremos tu contraseña de Gmail."
+              : provider === "proton"
+                ? "Crea una regla de reenvío y vuelve a CapitalFlow para aprobar la invitación si Proton la envía."
+                : "Configura el reenvío o una regla selectiva y vuelve a CapitalFlow. Comprobaremos el primer mensaje automáticamente."}
+          </p>
+          <div
+            className="setup-progress"
+            aria-label={`Progreso: paso ${setupStep} de 5`}
+          >
+            <span className={`setup-progress-step-${setupStep}`} />
+          </div>
+          <div className="button-row">
+            <button
+              className="primary-button"
+              type="button"
+              onClick={() => {
+                if (setupStep === 1)
+                  void act("add_source", {
+                    provider,
+                    label: sourceLabel.trim() || providerNames[provider],
+                  }).then(() => setSetupStep(2));
+                else setSetupStep((step) => Math.min(5, step + 1));
+              }}
+            >
+              {setupStep === 1
+                ? provider === "gmail"
+                  ? "Vincular Gmail"
+                  : provider === "outlook"
+                    ? "Vincular Outlook"
+                    : provider === "proton"
+                      ? "Vincular Proton Mail"
+                      : "Vincular correo"
+                : setupStep === 3
+                  ? "Actualizar estado"
+                  : "Siguiente"}
+            </button>
+            {setupStep === 3 ? (
+              <button
+                className="secondary-button"
+                type="button"
+                onClick={() => void load()}
+              >
+                Volver a CapitalFlow
+              </button>
+            ) : null}
+          </div>
+          <details>
+            <summary>¿Necesitas ayuda?</summary>
+            <p>
+              Sal de CapitalFlow para configurar tu proveedor y vuelve aquí.
+              Nunca compartas ni captures la dirección completa.
+            </p>
+          </details>
+        </section>
+      ) : null}
+      {waiting ? (
+        <section
+          className="notice relay-waiting"
+          role="status"
+          aria-live="polite"
+        >
+          <strong>
+            Esperando la confirmación de {providerNames[provider]}
+          </strong>
+          <p>
+            CapitalFlow la detectará automáticamente. Puedes volver cuando
+            termines en tu proveedor.
+          </p>
+          <button
+            className="secondary-button"
+            type="button"
+            onClick={() => void load()}
+          >
+            Actualizar estado
+          </button>
+        </section>
+      ) : null}
+      {state.aliasHint || state.address ? (
+        <section className="relay-section relay-source-form">
           <h3>Agregar otro correo</h3>
           <label className="field">
             Proveedor
@@ -425,11 +567,17 @@ export function EmailRelayCard() {
               })
             }
           >
-            Agregar fuente
+            {provider === "gmail"
+              ? "Vincular Gmail"
+              : provider === "outlook"
+                ? "Vincular Outlook"
+                : provider === "proton"
+                  ? "Vincular Proton Mail"
+                  : "Vincular correo"}
           </button>
         </section>
       ) : null}
-      <details className="relay-guide" open>
+      <details className="relay-guide">
         <summary>Configuración del reenvío</summary>
         <ol className="guide-steps">
           {guide.map(([text, image], i) => (
