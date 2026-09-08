@@ -21,6 +21,20 @@ export function App() {
   useAndroidCandidateSync(Boolean(session.user));
 
   if (session.loading) return <LoadingScreen label="Abriendo CapitalFlow…" />;
+  if (session.error) {
+    return (
+      <main className="center-screen" role="alert" aria-live="assertive">
+        <section className="auth-card" aria-labelledby="startup-error-title">
+          <div className="brand auth-brand"><span className="brand-mark">CF</span><span>CapitalFlow</span></div>
+          <h1 id="startup-error-title">No se pudo iniciar CapitalFlow</h1>
+          <p>{session.error}</p>
+          <button className="primary-button full" type="button" onClick={() => window.location.reload()}>
+            Reintentar
+          </button>
+        </section>
+      </main>
+    );
+  }
   if (!session.user) {
     return <AuthPage onSignIn={session.signIn} onSignUp={session.signUp} onReset={session.resetPassword} />;
   }
