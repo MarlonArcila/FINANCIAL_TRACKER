@@ -2,6 +2,7 @@ import { assertEquals, assertRejects } from "jsr:@std/assert@1";
 import {
   detectForwardingVerification,
   detectGmailForwardingConfirmation,
+  extractMailContent,
   extractAliasToken,
   extractTextFromMime,
   isDifferentRelaySource,
@@ -202,21 +203,21 @@ Deno.test(
       detectForwardingVerification(
         "Gmail forwarding confirmation",
         "Confirm at http://evil.example/verify",
-      ),
-      null,
+      )?.action.kind,
+      "instructions_only",
     );
     assertEquals(
       detectForwardingVerification(
         "Gmail forwarding confirmation",
         "Confirm at javascript:alert(1)",
-      ),
+      )?.url,
       null,
     );
     assertEquals(
       detectForwardingVerification(
         "Gmail forwarding confirmation",
         "Confirm at data:text/plain,no",
-      ),
+      )?.url,
       null,
     );
     const codeOnly = detectForwardingVerification(
@@ -239,3 +240,71 @@ Deno.test(
     );
   },
 );
+
+Deno.test(
+  "MIME extraction keeps HTML-only Gmail confirmation anchors without rendering HTML",
+  () => {
+    const raw =
+      'Subject: Gmail forwarding confirmation\r\nContent-Type: text/html; charset=UTF-8\r\n\r\n<p>Confirm forwarding</p><a href="https://mail-settings.google.com/mail/confirm?x=1&amp;y=2">Confirm forwarding</a>';
+    const content = extractMailContent(raw);
+    const hit = detectForwardingVerification({
+      providerHint: "gmail",
+      subject: content.subject,
+      text: content.text,
+      links: content.htmlLinks,
+    });
+    assertEquals(content.htmlLinks[0]?.href.includes("x=1&y=2"), true);
+    assertEquals(hit?.action.kind, "safe_url");
+  },
+);
+Deno.test(
+  "nested multipart and quoted-printable Proton accept action are extracted while attachments are ignored",
+  () => {
+    const raw =
+      'Subject: Proton forwarding invitation\r\nContent-Type: multipart/mixed; boundary=outer\r\n\r\n--outer\r\nContent-Type: multipart/alternative; boundary=inner\r\n\r\n--inner\r\nContent-Type: text/html\r\nContent-Transfer-Encoding: quoted-printable\r\n\r\n<p>Accept forwarding</p><a href=3D"https://account.proton.me/forward?ok=3D1">Accept forwarding</a>\r\n--inner--\r\n--outer\r\nContent-Type: text/plain; name=bad.txt\r\nContent-Disposition: attachment\r\n\r\nhttps://evil.example/confirm\r\n--outer--';
+    const content = extractMailContent(raw);
+    const hit = detectForwardingVerification({
+      providerHint: "proton",
+      subject: content.subject,
+      text: content.text,
+      links: content.htmlLinks,
+    });
+    assertEquals(hit?.provider, "proton");
+    assertEquals(hit?.url?.startsWith("https://account.proton.me/"), true);
+  },
+);
+Deno.test(
+  "base64 HTML and decline links never select a destructive action",
+  () => {
+    const html =
+      '<a href="https://account.proton.me/decline">Decline forwarding</a>';
+    const raw =
+      "Subject: Proton forwarding invitation\r\nContent-Type: text/html\r\nContent-Transfer-Encoding: base64\r\n\r\n" +
+      btoa(html);
+    const content = extractMailContent(raw);
+    const hit = detectForwardingVerification({
+      providerHint: "proton",
+      subject: content.subject,
+      text: content.text,
+      links: content.htmlLinks,
+    });
+    assertEquals(hit?.action.kind, "instructions_only");
+  },
+);
+Deno.test("lookalike, javascript and data URLs never become actions", () => {
+  for (const url of [
+    "https://google.com.evil.example/confirm",
+    "javascript:alert(1)",
+    "data:text/plain,test",
+  ]) {
+    const hit = detectForwardingVerification({
+      providerHint: "gmail",
+      subject: "Gmail forwarding confirmation",
+      text: "Confirm forwarding",
+      links: [
+        { href: url, visibleText: "Confirm forwarding", surroundingText: "" },
+      ],
+    });
+    assertEquals(hit?.url, null);
+  }
+});

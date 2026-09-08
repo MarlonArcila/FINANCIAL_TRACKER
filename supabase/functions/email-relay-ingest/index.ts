@@ -6,7 +6,7 @@ import {
   detectForwardingVerification,
   EMAIL_RELAY_MAX_RAW_BYTES,
   extractAliasToken,
-  extractTextFromMime,
+  extractMailContent,
   sanitizeRelayHeader,
   sha256Hex,
   verifyRelaySignature,
@@ -161,11 +161,28 @@ Deno.serve(async (request) => {
         ? new Date(body.date).toISOString()
         : receivedAt;
     const rawText = new TextDecoder("utf-8", { fatal: false }).decode(rawBytes);
-    const text = extractTextFromMime(rawText);
+    const content = extractMailContent(rawText);
+    const text = content.text;
+    const detectedSubject = content.subject ?? subject;
     const fingerprint = await sha256Base64Url(
       `email_relay|${alias.alias_id}|${messageId ?? ""}|${computedHash}`,
     );
-    const verification = detectForwardingVerification(subject, text);
+    const verification = detectForwardingVerification({
+      providerHint: sourceProvider,
+      subject: detectedSubject,
+      text,
+      links: content.htmlLinks,
+      envelopeSender,
+      from,
+      authenticationResults: sanitizeRelayHeader(
+        record(body.authentication).authenticationResults,
+        4000,
+      ),
+      receivedSpf: sanitizeRelayHeader(
+        record(body.authentication).receivedSpf,
+        2000,
+      ),
+    });
     const auth = record(body.authentication);
     const metadata = verification
       ? {
@@ -240,39 +257,55 @@ Deno.serve(async (request) => {
     }
 
     if (verification) {
-      const { data: gmailMatchData, error: gmailMatchError } = await service
-        .rpc("service_match_email_relay_source", {
-          p_alias_id: alias.alias_id,
-          p_provider: "gmail",
-        })
-        .single();
-      if (gmailMatchError) throw gmailMatchError;
-      const gmailMatch = relaySourceMatchRow(gmailMatchData);
-      sourceId =
-        gmailMatch.source_id ?? (sourceProvider === "gmail" ? sourceId : null);
+      const { data: detectedMatchData, error: detectedMatchError } =
+        await service
+          .rpc("service_match_email_relay_source", {
+            p_alias_id: alias.alias_id,
+            p_provider: verification.provider,
+          })
+          .single();
+      if (detectedMatchError) throw detectedMatchError;
+      const detectedMatch = relaySourceMatchRow(detectedMatchData);
+      sourceId = detectedMatch.source_id;
+      if (detectedMatch.match_status === "revoked") {
+        await service
+          .from("source_events")
+          .update({
+            processing_status: "ignored",
+            processing_error: "relay_source_revoked",
+            recipient_source_id: sourceId,
+          })
+          .eq("id", source.id);
+        return json(
+          { accepted: true, financial: false, source: "revoked" },
+          202,
+        );
+      }
       await service
         .from("source_events")
         .update({
           processing_status: "ignored",
           processing_error: null,
           recipient_source_id: sourceId,
-          forwarding_provider_hint: "gmail",
+          forwarding_provider_hint: verification.provider,
           metadata: {
-            ...metadata,
+            relay_version: "email-relay-v2-multi-source",
             event_type: "forwarding_verification",
-            forwarding_provider_hint: "gmail",
-            source_match_status: gmailMatch?.match_status ?? "unknown",
+            provider: verification.provider,
+            source_match_status: detectedMatch.match_status,
           },
         })
         .eq("id", source.id);
       const { error } = await service.rpc("service_update_email_relay_state", {
         p_alias_id: alias.alias_id,
         p_source_id: sourceId,
-        p_provider_hint: "gmail",
+        p_provider_hint: verification.provider,
         p_status: "pending",
         p_financial: false,
-        p_gmail_url: verification.url,
-        p_gmail_code: verification.code,
+        p_gmail_url:
+          verification.provider === "gmail" ? verification.url : null,
+        p_gmail_code:
+          verification.provider === "gmail" ? verification.code : null,
       });
       if (error) throw error;
       const { error: inboxError } = await service.rpc(
@@ -284,7 +317,7 @@ Deno.serve(async (request) => {
           p_source_event_id: source.id,
           p_provider: verification.provider,
           p_sender: from ?? envelopeSender,
-          p_subject: subject,
+          p_subject: detectedSubject,
           p_excerpt: verification.excerpt,
           p_url: verification.url,
           p_code: verification.code,
@@ -297,7 +330,6 @@ Deno.serve(async (request) => {
         202,
       );
     }
-
     try {
       await assertEntitled(service, alias.user_id);
     } catch (error) {

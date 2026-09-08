@@ -42,6 +42,54 @@ function provider(value: unknown): SourceProvider {
     ? value
     : "other";
 }
+function safeVerificationUrl(
+  provider: SourceProvider,
+  value: unknown,
+): string | null {
+  if (typeof value !== "string") return null;
+  try {
+    const url = new URL(value);
+    const host = url.hostname.toLowerCase();
+    const google = host === "google.com" || host.endsWith(".google.com");
+    const proton =
+      host === "proton.me" ||
+      host.endsWith(".proton.me") ||
+      host === "protonmail.com" ||
+      host.endsWith(".protonmail.com");
+    return url.protocol === "https:" &&
+      ((provider === "gmail" && google) || (provider === "proton" && proton))
+      ? url.toString()
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+function verificationAction(value: any): {
+  kind: "safe_url" | "code" | "safe_url_and_code" | "instructions_only";
+  label: string;
+  url?: string;
+  code?: string;
+} {
+  const url = safeVerificationUrl(
+    provider(value.provider),
+    value.verification_url,
+  );
+  const code =
+    typeof value.verification_code === "string"
+      ? value.verification_code
+      : null;
+  if (url && code)
+    return {
+      kind: "safe_url_and_code",
+      label: "Aprobar vinculación",
+      url,
+      code,
+    };
+  if (url) return { kind: "safe_url", label: "Aprobar vinculación", url };
+  if (code) return { kind: "code", label: "Copiar código", code };
+  return { kind: "instructions_only", label: "Ver cómo completarlo" };
+}
 function defaultLabel(value: SourceProvider): string {
   if (value === "gmail") return "Gmail";
   if (value === "outlook") return "Outlook / Hotmail";
@@ -198,8 +246,9 @@ Deno.serve((request) =>
           sender: v.sender,
           subject: v.subject,
           excerpt: v.excerpt,
-          verificationUrl: v.verification_url,
-          verificationCode: v.verification_code,
+          action: verificationAction(v),
+          verificationUrl: verificationAction(v).url ?? null,
+          verificationCode: verificationAction(v).code ?? null,
           receivedAt: v.received_at,
           expiresAt: v.expires_at,
         })),
