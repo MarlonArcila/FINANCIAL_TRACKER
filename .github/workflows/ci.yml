@@ -24,7 +24,7 @@ jobs:
           distribution: temurin
           java-version: "21"
       - name: Install dependencies
-        run: npm install
+        run: npm ci
       - name: Run Node, Deno, and Android tests
         run: npm run test:all
       - name: Type-check workspaces

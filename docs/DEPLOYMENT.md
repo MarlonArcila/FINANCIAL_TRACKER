@@ -1,5 +1,8 @@
 # Despliegue — CapitalFlow MVP
 
+> **Current runtime/release note:** read `docs/RELEASE_CONTRACT.md` before using this historical guidance for integrations, Supabase browser keys, Vercel automation, or production release. The current Integrations UI exposes only the automatic Email Relay; legacy Gmail OAuth/Android material below is retained as historical/backend context.
+
+
 ## 1. Ambientes
 
 Mantenga tres ambientes aislados:
@@ -26,7 +29,7 @@ No reutilice secretos, bases de datos, OAuth clients ni webhooks entre staging y
 
 ```bash
 cp .env.example .env.local
-npm install
+npm ci
 npm run test:all
 npm run typecheck
 npm run dev

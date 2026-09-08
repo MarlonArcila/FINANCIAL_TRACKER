@@ -1,5 +1,8 @@
 # Handoff para Codex, Lovable, Replit, Base44 y constructores similares
 
+> **Current runtime/release note:** read `docs/RELEASE_CONTRACT.md` before using this historical guidance for integrations, Supabase browser keys, Vercel automation, or production release. The current Integrations UI exposes only the automatic Email Relay; legacy Gmail OAuth/Android material below is retained as historical/backend context.
+
+
 ## 1. Prompt maestro reutilizable
 
 Copie el siguiente bloque en la herramienta elegida y adjunte `PRD.md`, `TECHNICAL_TASKS.md`, `ARCHITECTURE.md`, la migración SQL y `packages/core`:

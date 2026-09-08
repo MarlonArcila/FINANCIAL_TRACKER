@@ -11,7 +11,7 @@ This repository is intended to be implemented and extended primarily with Codex 
 5. Service-role or secret keys are server-only. Publishable keys may be exposed only with RLS enabled.
 6. Every external webhook must verify its signature or validation token and be idempotent.
 7. Every write path must enforce an active paid subscription, except account creation, checkout, privacy/export, and account deletion.
-8. The product does not connect to bank APIs. Ingestion sources are Android notifications, Gmail, and manual entry.
+8. The product does not connect to bank APIs. The active user-facing Integrations surface uses the automatic Email Relay (one shared private alias for Gmail, Outlook/Hotmail, Proton Mail, or another forwarding source). Legacy Gmail OAuth and Android ingestion code may remain only for rollback/compatibility unless an explicit product decision reactivates them.
 9. Investment guidance is educational scenario modeling, not a guarantee or individualized regulated advice. Calculations come from deterministic functions; AI may only explain those calculations.
 10. Add or update tests whenever parser, allocation, subscription, or deduplication behavior changes.
 
@@ -54,3 +54,10 @@ A task is done only when its acceptance criteria pass, type checking succeeds, r
 - The primary account cannot be archived. Secondary annual accounts may be archived/restored without deleting history.
 - `account-manage` is the trusted creation/archive/restore boundary; UI hiding alone is never entitlement enforcement.
 - Cloud backups must include both active and archived account rows and preserve `is_primary`, `purpose`, `purpose_label`, and `archived_at`.
+
+## Execution and release contract
+
+- For deployment, runtime, external CLI, environment, and current integration-surface decisions, read `docs/RELEASE_CONTRACT.md` before acting.
+- Current repository state, live CLI help, official vendor docs, and live remote state outrank old handoffs, old repair scripts, or chat history.
+- Older Gmail OAuth/Android onboarding text is historical/backend context and must not re-expose those integrations without an explicit new product decision.
+- Automation must use an isolated workspace, accept equivalent safe states, and reject unrelated tracked mutations rather than requiring a transient tool side effect.
