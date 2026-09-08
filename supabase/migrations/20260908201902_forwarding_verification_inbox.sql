@@ -76,9 +76,6 @@ returns void language sql security invoker set search_path='' as $$
   update private.email_relay_forwarding_verifications set status='dismissed',dismissed_at=coalesce(dismissed_at,now()),verification_url=null,verification_code=null,message_excerpt=null,updated_at=now()
   where alias_id=p_alias_id and status in ('pending','opened');
 $$;
-revoke all on function public.service_purge_email_relay_verifications(),public.service_create_email_relay_forwarding_verification(uuid,uuid,uuid,uuid,text,text,text,text,text,text,timestamptz),public.service_list_email_relay_forwarding_verifications(uuid),public.service_update_email_relay_forwarding_verification(uuid,uuid,text),public.service_invalidate_email_relay_verifications(uuid) from public,anon,authenticated;
-grant execute on function public.service_purge_email_relay_verifications(),public.service_create_email_relay_forwarding_verification(uuid,uuid,uuid,uuid,text,text,text,text,text,text,timestamptz),public.service_list_email_relay_forwarding_verifications(uuid),public.service_update_email_relay_forwarding_verification(uuid,uuid,text),public.service_invalidate_email_relay_verifications(uuid) to service_role;
-
 -- Clearing is automatic when an alias or individual source is revoked; no UI path can leave an actionable secret behind.
 create or replace function private.invalidate_email_relay_verifications_on_alias_revoke()
 returns trigger language plpgsql security invoker set search_path='' as $$
@@ -121,3 +118,6 @@ language sql security invoker set search_path='' as $$
   where v.user_id=p_user_id and v.status in ('pending','opened') and v.expires_at>now()
   order by v.received_at desc
 $$;
+
+revoke all on function public.service_purge_email_relay_verifications(),public.service_create_email_relay_forwarding_verification(uuid,uuid,uuid,uuid,text,text,text,text,text,text,timestamptz),public.service_list_email_relay_forwarding_verifications(uuid),public.service_update_email_relay_forwarding_verification(uuid,uuid,text),public.service_invalidate_email_relay_verifications(uuid) from public,anon,authenticated;
+grant execute on function public.service_purge_email_relay_verifications(),public.service_create_email_relay_forwarding_verification(uuid,uuid,uuid,uuid,text,text,text,text,text,text,timestamptz),public.service_list_email_relay_forwarding_verifications(uuid),public.service_update_email_relay_forwarding_verification(uuid,uuid,text),public.service_invalidate_email_relay_verifications(uuid) to service_role;

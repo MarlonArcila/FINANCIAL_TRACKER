@@ -180,6 +180,11 @@ if (inboxMigration) {
       inboxSql.includes("where id=p_verification_id and user_id=p_user_id"),
     "verification mutations enforce owner isolation",
   );
+  must(
+    inboxSql.indexOf("create or replace function public.service_list_email_relay_forwarding_verifications") <
+      inboxSql.indexOf("revoke all on function public.service_purge_email_relay_verifications"),
+    "verification RPC permissions are declared after their functions",
+  );
 }
 must(
   relayShared.includes("detectForwardingVerification") &&
