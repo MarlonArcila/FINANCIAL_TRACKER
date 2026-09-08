@@ -10,7 +10,7 @@ const items: Array<{ route: AppRoute; label: string; icon: string }> = [
   { route: "goals", label: "Metas", icon: "◎" },
   { route: "investments", label: "Inversiones", icon: "⌁" },
   { route: "advisor", label: "Plan", icon: "◇" },
-  { route: "integrations", label: "Fuentes", icon: "⛓" },
+  { route: "integrations", label: "Fuentes Financieras", icon: "⛓" },
   { route: "data", label: "Datos", icon: "⇄" },
   { route: "settings", label: "Ajustes", icon: "⚙" },
 ];
@@ -35,7 +35,11 @@ export function AppShell({
   return (
     <div className="app-layout">
       <aside className="sidebar">
-        <button className="brand" onClick={() => navigate("dashboard")} type="button">
+        <button
+          className="brand"
+          onClick={() => navigate("dashboard")}
+          type="button"
+        >
           <span className="brand-mark">CF</span>
           <span>CapitalFlow</span>
         </button>
@@ -53,12 +57,26 @@ export function AppShell({
           ))}
         </nav>
         <div className="sidebar-footer">
-          <button type="button" className="plan-chip" onClick={() => navigate("subscription")}>Plan activo</button>
+          <button
+            type="button"
+            className="plan-chip"
+            onClick={() => navigate("subscription")}
+          >
+            Plan activo
+          </button>
           <div className="user-row">
-            <div className="avatar">{(user.email?.[0] ?? "U").toUpperCase()}</div>
+            <div className="avatar">
+              {(user.email?.[0] ?? "U").toUpperCase()}
+            </div>
             <div>
               <strong>{user.email ?? "Usuario"}</strong>
-              <button className="text-button" type="button" onClick={() => void onSignOut()}>Cerrar sesión</button>
+              <button
+                className="text-button"
+                type="button"
+                onClick={() => void onSignOut()}
+              >
+                Cerrar sesión
+              </button>
             </div>
           </div>
         </div>
@@ -69,18 +87,33 @@ export function AppShell({
           role="status"
           aria-live="polite"
         >
-          <span aria-hidden="true">{connectivity.online && !connectivity.usingCachedData ? "●" : "○"}</span>
+          <span aria-hidden="true">
+            {connectivity.online && !connectivity.usingCachedData ? "●" : "○"}
+          </span>
           {connectivity.online && !connectivity.usingCachedData
             ? `En línea · última sincronización ${lastSyncLabel}`
             : `Modo lectura · mostrando datos guardados del ${lastSyncLabel}`}
         </div>
         <header className="mobile-header">
-          <button className="brand" onClick={() => navigate("dashboard")} type="button">
+          <button
+            className="brand"
+            onClick={() => navigate("dashboard")}
+            type="button"
+          >
             <span className="brand-mark">CF</span>
             <span>CapitalFlow</span>
           </button>
-          <select className="mobile-route-select" aria-label="Ir a sección" value={route} onChange={(event) => navigate(event.target.value as AppRoute)}>
-            {items.map((item) => <option key={item.route} value={item.route}>{item.label}</option>)}
+          <select
+            className="mobile-route-select"
+            aria-label="Ir a sección"
+            value={route}
+            onChange={(event) => navigate(event.target.value as AppRoute)}
+          >
+            {items.map((item) => (
+              <option key={item.route} value={item.route}>
+                {item.label}
+              </option>
+            ))}
           </select>
         </header>
         <main className="content">{children}</main>

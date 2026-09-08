@@ -1,32 +1,215 @@
 import fs from "node:fs";
-const read=(p)=>fs.readFileSync(p,"utf8");
-const must=(ok,msg)=>{if(!ok){console.error(`FAIL ${msg}`);process.exitCode=1;}else console.log(`PASS ${msg}`)};
-const migration=fs.readdirSync("supabase/migrations").filter((x)=>x.endsWith("_email_relay_multi_source_cloudflare_commercial_pilot.sql"));
-must(migration.length===1,"exactly one CLI-created multi-source relay migration");
-const sql=read(`supabase/migrations/${migration[0]}`); const gateway=read("supabase/functions/email-relay-ingest/index.ts"); const ingestion=read("supabase/functions/_shared/ingestion.ts"); const relayShared=read("supabase/functions/_shared/email-relay.ts"); const worker=read("workers/email-relay/src/index.mjs"); const parser=read("supabase/functions/_shared/financial-parser.ts"); const ui=read("apps/web/src/components/EmailRelayCard.tsx"); const wrangler=read("workers/email-relay/wrangler.jsonc");
-const integrations=read("apps/web/src/pages/IntegrationsPage.tsx");
-must(sql.includes("private.email_relay_aliases") && sql.includes("token_hash"),"primary alias token is hash-only in private schema");
-must(sql.includes("private.email_relay_sources") && sql.includes("'gmail','outlook','proton','other'"),"one alias can register Gmail Outlook Proton and other sources");
-must(!sql.includes("provider_preference"),"provider selection is no longer stored on the primary alias");
-must(sql.includes("recipient_source_id") && sql.includes("forwarding_provider_hint"),"source-event lineage includes relay source and provider hint");
-must(sql.includes("source_events_email_relay_message_uidx") && sql.includes("source_events_email_relay_raw_uidx"),"Message-ID and raw hash dedup stay primary-alias scoped");
-must(sql.includes("parser_version") && sql.includes("candidate_id") && sql.includes("transaction_id"),"source-event parser/candidate/transaction lineage is explicit");
-must(!/source_connections_provider_check[\s\S]{0,180}outlook/.test(sql) && !/source_events_provider_check[\s\S]{0,180}outlook/.test(sql),"relay does not re-enable retired Outlook OAuth/data-plane provider");
-must(!/source_connections_provider_check[\s\S]{0,180}proton/.test(sql) && !/source_events_provider_check[\s\S]{0,180}proton/.test(sql),"Proton remains a relay source, not a public data-plane provider");
-must(gateway.includes("verifyRelaySignature") && gateway.includes("service_claim_email_relay_replay"),"gateway verifies HMAC and claims replay nonce");
-must(gateway.includes("service_match_email_relay_source") && gateway.includes("recipient_source_id") && gateway.includes("relay_source_revoked"),"gateway links unambiguous sources and blocks explicitly revoked providers before candidate creation");
-must(gateway.includes("assertEntitled") && gateway.includes("parseMailMessage") && gateway.includes("ingestCandidate"),"gateway reuses entitlement parser and ingestion pipeline");
-must(gateway.includes("error.status !== 402") && gateway.includes("subscription_inactive"),"only inactive entitlement is converted into a non-processing relay event");
-must(worker.includes("detectForwardingProvider") && worker.includes("forwardingProviderHint"),"worker captures a non-authoritative Gmail Outlook Proton forwarding hint");
-must(worker.includes("CAPITALFLOW_EMAIL_RELAY_HMAC_SECRET") && !worker.includes("SUPABASE_SERVICE_ROLE") && !worker.includes("SUPABASE_SECRET"),"worker contains no Supabase privileged credential");
-must(worker.includes("rawSize") && worker.includes("MAX_RAW_BYTES"),"worker enforces strict message size");
-must(parser.includes('"email_relay"'),"existing multilingual parser accepts email_relay provider");
-must(ui.includes("Proton Mail") && ui.includes("misma direccion") && ui.includes("sources"),"onboarding supports many mail sources through one shared address");
-must(!sql.includes("raw_mime") && !sql.includes("raw_body"),"raw MIME is not persisted in database schema");
-must(gateway.includes("aliasId:alias.alias_id") && gateway.includes("sourceId") && gateway.includes("providerHint:sourceProvider"),"gateway passes relay source identity into semantic dedup");
-must(ingestion.includes("recipient_alias_id: sourceContext?.aliasId") && ingestion.includes("isDifferentRelaySource(previous,sourceContext)"),"candidate ingestion preserves alias/source lineage and dedups across relay sources");
-must(relayShared.includes("export function isDifferentRelaySource") && relayShared.includes("left.aliasId !== right.aliasId"),"relay semantic dedup is alias-scoped");
-must(/"workers_dev"\s*:\s*false/.test(wrangler) && /"preview_urls"\s*:\s*false/.test(wrangler) && !/"routes?"\s*:/.test(wrangler),"routing-only Email Worker disables workers.dev and preview URLs");
-must(integrations.includes("<EmailRelayCard />"),"integrations page exposes the automatic financial email relay");
-must(!integrations.includes("notificationAccess") && !integrations.includes("MailCard") && !integrations.includes("gmail-oauth-start") && !integrations.includes("syncAndroidCandidates"),"integrations page hides legacy Android and Gmail OAuth options");
-if(process.exitCode) process.exit(process.exitCode);
+const read = (p) => fs.readFileSync(p, "utf8");
+const must = (ok, msg) => {
+  if (!ok) {
+    console.error(`FAIL ${msg}`);
+    process.exitCode = 1;
+  } else console.log(`PASS ${msg}`);
+};
+const migration = fs
+  .readdirSync("supabase/migrations")
+  .filter((x) =>
+    x.endsWith("_email_relay_multi_source_cloudflare_commercial_pilot.sql"),
+  );
+must(
+  migration.length === 1,
+  "exactly one CLI-created multi-source relay migration",
+);
+const sql = read(`supabase/migrations/${migration[0]}`);
+const gateway = read("supabase/functions/email-relay-ingest/index.ts");
+const ingestion = read("supabase/functions/_shared/ingestion.ts");
+const relayShared = read("supabase/functions/_shared/email-relay.ts");
+const worker = read("workers/email-relay/src/index.mjs");
+const parser = read("supabase/functions/_shared/financial-parser.ts");
+const ui = read("apps/web/src/components/EmailRelayCard.tsx");
+const wrangler = read("workers/email-relay/wrangler.jsonc");
+const integrations = read("apps/web/src/pages/IntegrationsPage.tsx");
+must(
+  sql.includes("private.email_relay_aliases") && sql.includes("token_hash"),
+  "primary alias token is hash-only in private schema",
+);
+must(
+  sql.includes("private.email_relay_sources") &&
+    sql.includes("'gmail','outlook','proton','other'"),
+  "one alias can register Gmail Outlook Proton and other sources",
+);
+must(
+  !sql.includes("provider_preference"),
+  "provider selection is no longer stored on the primary alias",
+);
+must(
+  sql.includes("recipient_source_id") &&
+    sql.includes("forwarding_provider_hint"),
+  "source-event lineage includes relay source and provider hint",
+);
+must(
+  sql.includes("source_events_email_relay_message_uidx") &&
+    sql.includes("source_events_email_relay_raw_uidx"),
+  "Message-ID and raw hash dedup stay primary-alias scoped",
+);
+must(
+  sql.includes("parser_version") &&
+    sql.includes("candidate_id") &&
+    sql.includes("transaction_id"),
+  "source-event parser/candidate/transaction lineage is explicit",
+);
+must(
+  !/source_connections_provider_check[\s\S]{0,180}outlook/.test(sql) &&
+    !/source_events_provider_check[\s\S]{0,180}outlook/.test(sql),
+  "relay does not re-enable retired Outlook OAuth/data-plane provider",
+);
+must(
+  !/source_connections_provider_check[\s\S]{0,180}proton/.test(sql) &&
+    !/source_events_provider_check[\s\S]{0,180}proton/.test(sql),
+  "Proton remains a relay source, not a public data-plane provider",
+);
+must(
+  gateway.includes("verifyRelaySignature") &&
+    gateway.includes("service_claim_email_relay_replay"),
+  "gateway verifies HMAC and claims replay nonce",
+);
+must(
+  gateway.includes("service_match_email_relay_source") &&
+    gateway.includes("recipient_source_id") &&
+    gateway.includes("relay_source_revoked"),
+  "gateway links unambiguous sources and blocks explicitly revoked providers before candidate creation",
+);
+must(
+  gateway.includes("assertEntitled") &&
+    gateway.includes("parseMailMessage") &&
+    gateway.includes("ingestCandidate"),
+  "gateway reuses entitlement parser and ingestion pipeline",
+);
+must(
+  gateway.includes("error.status !== 402") &&
+    gateway.includes("subscription_inactive"),
+  "only inactive entitlement is converted into a non-processing relay event",
+);
+must(
+  worker.includes("detectForwardingProvider") &&
+    worker.includes("forwardingProviderHint"),
+  "worker captures a non-authoritative Gmail Outlook Proton forwarding hint",
+);
+must(
+  worker.includes("CAPITALFLOW_EMAIL_RELAY_HMAC_SECRET") &&
+    !worker.includes("SUPABASE_SERVICE_ROLE") &&
+    !worker.includes("SUPABASE_SECRET"),
+  "worker contains no Supabase privileged credential",
+);
+must(
+  worker.includes("rawSize") && worker.includes("MAX_RAW_BYTES"),
+  "worker enforces strict message size",
+);
+must(
+  parser.includes('"email_relay"'),
+  "existing multilingual parser accepts email_relay provider",
+);
+must(
+  ui.includes("Proton Mail") &&
+    ui.includes("misma") &&
+    ui.includes("dirección") &&
+    ui.includes("sources"),
+  "onboarding supports many mail sources through one shared address",
+);
+must(
+  !sql.includes("raw_mime") && !sql.includes("raw_body"),
+  "raw MIME is not persisted in database schema",
+);
+must(
+  gateway.includes("aliasId: alias.alias_id") &&
+    gateway.includes("sourceId") &&
+    gateway.includes("providerHint: sourceProvider"),
+  "gateway passes relay source identity into semantic dedup",
+);
+must(
+  ingestion.includes("recipient_alias_id: sourceContext?.aliasId") &&
+    ingestion.includes("isDifferentRelaySource(previous,sourceContext)"),
+  "candidate ingestion preserves alias/source lineage and dedups across relay sources",
+);
+must(
+  relayShared.includes("export function isDifferentRelaySource") &&
+    relayShared.includes("left.aliasId !== right.aliasId"),
+  "relay semantic dedup is alias-scoped",
+);
+must(
+  /"workers_dev"\s*:\s*false/.test(wrangler) &&
+    /"preview_urls"\s*:\s*false/.test(wrangler) &&
+    !/"routes?"\s*:/.test(wrangler),
+  "routing-only Email Worker disables workers.dev and preview URLs",
+);
+must(
+  integrations.includes("<EmailRelayCard />"),
+  "integrations page exposes the automatic financial email relay",
+);
+must(
+  !integrations.includes("notificationAccess") &&
+    !integrations.includes("MailCard") &&
+    !integrations.includes("gmail-oauth-start") &&
+    !integrations.includes("syncAndroidCandidates"),
+  "integrations page hides legacy Android and Gmail OAuth options",
+);
+
+const inboxMigration = fs
+  .readdirSync("supabase/migrations")
+  .find((x) => x.endsWith("_forwarding_verification_inbox.sql"));
+must(
+  Boolean(inboxMigration),
+  "CLI-created forwarding verification inbox migration exists",
+);
+if (inboxMigration) {
+  const inboxSql = read(`supabase/migrations/${inboxMigration}`);
+  must(
+    inboxSql.includes("private.email_relay_forwarding_verifications") &&
+      inboxSql.includes("unique(source_event_id)"),
+    "verification inbox is private and idempotent by source event",
+  );
+  must(
+    inboxSql.includes("enable row level security") &&
+      inboxSql.includes("revoke all on table") &&
+      inboxSql.includes("grant select,insert,update,delete"),
+    "verification inbox is service-only with RLS defense in depth",
+  );
+  must(
+    inboxSql.includes("interval '7 days'") &&
+      inboxSql.includes("verification_url=null") &&
+      inboxSql.includes("email_relay_alias_verifications_invalidate"),
+    "verification secrets expire and revocation clears pending secrets",
+  );
+  must(
+    inboxSql.includes("p_user_id") &&
+      inboxSql.includes("where id=p_verification_id and user_id=p_user_id"),
+    "verification mutations enforce owner isolation",
+  );
+}
+must(
+  relayShared.includes("detectForwardingVerification") &&
+    relayShared.includes('hostname.endsWith(".google.com")') &&
+    relayShared.includes('u.protocol === "https:"'),
+  "generic detector only permits HTTPS Google verification links",
+);
+must(
+  gateway.includes("const verification = detectForwardingVerification") &&
+    gateway.includes("text_sanitized: verification\n") &&
+    gateway.includes('processing_status: "ignored"'),
+  "verification messages bypass financial parsing and avoid generic secret persistence",
+);
+must(
+  ui.includes("Verificaciones de reenvío") &&
+    ui.includes("Abrir verificación") &&
+    ui.includes('rel="noreferrer noopener"'),
+  "UI renders an owner-scoped safe verification inbox",
+);
+must(
+  ui.includes("Guarda esta dirección ahora") &&
+    ui.includes("¿Perdiste la dirección completa?") &&
+    ui.includes("Rotar dirección"),
+  "UI preserves one-time alias reveal and recovery flow",
+);
+must(
+  ui.includes("Configuración del reenvío") &&
+    ui.includes("Filtros sugeridos para Gmail") &&
+    ui.includes("No actives el reenvío global"),
+  "UI provides Gmail forwarding and financial-filter guidance",
+);
+
+if (process.exitCode) process.exit(process.exitCode);

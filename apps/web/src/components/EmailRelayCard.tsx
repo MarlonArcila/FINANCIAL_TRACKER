@@ -1,41 +1,504 @@
 import { useEffect, useMemo, useState } from "react";
 import { invokeFunction } from "../lib/api";
 
-type RelayState="NOT_CONFIGURED"|"VERIFICATION_PENDING"|"ACTIVE"|"ERROR"|"REVOKED";
-type SourceProvider="gmail"|"outlook"|"proton"|"other";
-type CatalogItem={id:string;display_name:string;sender_domains:string[];country_code:string|null;sort_order:number};
-type RelaySource={id:string;provider:SourceProvider;label:string;state:RelayState;gmailConfirmationUrl?:string|null;gmailConfirmationCode?:string|null;lastReceivedAt?:string|null;lastFinancialEventAt?:string|null};
-type RelayResponse={state:RelayState;address?:string;aliasHint?:string|null;lastReceivedAt?:string|null;lastFinancialEventAt?:string|null;domain?:string;sources?:RelaySource[];catalog?:CatalogItem[]};
-const labels:Record<RelayState,string>={NOT_CONFIGURED:"No configurado",VERIFICATION_PENDING:"Verificacion pendiente",ACTIVE:"Activo",ERROR:"Error",REVOKED:"Revocado"};
-const providerNames:Record<SourceProvider,string>={gmail:"Gmail",outlook:"Outlook / Hotmail",proton:"Proton Mail",other:"Otro correo"};
-
-export function EmailRelayCard(){
-  const [state,setState]=useState<RelayResponse>({state:"NOT_CONFIGURED",sources:[]}); const [provider,setProvider]=useState<SourceProvider>("gmail");
-  const [sourceLabel,setSourceLabel]=useState(""); const [selected,setSelected]=useState<string[]>([]); const [busy,setBusy]=useState(false); const [message,setMessage]=useState<string|null>(null);
-  const load=async()=>{try{const data=await invokeFunction<RelayResponse>("email-relay-settings",{action:"state"});setState((prev)=>{const next:RelayResponse={...data};if(data.state==="REVOKED"){delete next.address;}else if(prev.address!==undefined){next.address=prev.address;}return next;});}catch{setMessage("No fue posible consultar el estado del correo automatico.");}};
-  useEffect(()=>{void load();},[]);
-  const domains=useMemo(()=>[...new Set((state.catalog ?? []).filter((x)=>selected.includes(x.id)).flatMap((x)=>x.sender_domains))],[state.catalog,selected]);
-  const gmailFilter=domains.length?`from:(${domains.map((x)=>`@${x}`).join(" OR ")})`:"Selecciona tus entidades para generar el filtro.";
-  const generate=async(action:"generate"|"rotate")=>{setBusy(true);setMessage(null);try{const data=await invokeFunction<RelayResponse>("email-relay-settings",{action});setState((prev)=>{const next:RelayResponse={...prev,...data,sources:data.sources ?? []};if(prev.catalog!==undefined){next.catalog=prev.catalog;}else{delete next.catalog;}if(prev.domain!==undefined){next.domain=prev.domain;}else{delete next.domain;}return next;});setMessage("Direccion privada creada. Usa esta misma direccion en Gmail, Outlook, Proton Mail o cualquier otro correo que quieras conectar.");}catch{setMessage("No fue posible crear la direccion privada. Verifica que tu suscripcion este activa.");}finally{setBusy(false);}};
-  const revoke=async()=>{setBusy(true);try{await invokeFunction("email-relay-settings",{action:"revoke"});await load();setMessage("Direccion y fuentes revocadas.");}finally{setBusy(false);}};
-  const addSource=async()=>{setBusy(true);setMessage(null);try{await invokeFunction("email-relay-settings",{action:"add_source",provider,label:sourceLabel.trim()||providerNames[provider]});setSourceLabel("");await load();setMessage(`${providerNames[provider]} agregado. Configura el reenvio hacia la misma direccion privada de CapitalFlow.`);}catch{setMessage("No fue posible agregar esta fuente de correo.");}finally{setBusy(false);}};
-  const revokeSource=async(sourceId:string)=>{setBusy(true);try{await invokeFunction("email-relay-settings",{action:"revoke_source",sourceId});await load();setMessage("Fuente de correo revocada sin afectar las demas.");}finally{setBusy(false);}};
-  const copy=async(value:string)=>{await navigator.clipboard.writeText(value);setMessage("Direccion copiada.");};
-  const providerGuide=provider==="gmail"?<ol><li>En Gmail abre Configuracion, Reenvio y agrega la direccion privada de CapitalFlow.</li><li>CapitalFlow detectara el correo de confirmacion de Gmail.</li><li>Confirma el reenvio y crea un filtro con tus entidades financieras.</li></ol>:provider==="outlook"?<ol><li>En Outlook abre Configuracion, Correo, Reglas.</li><li>Crea una regla con tus remitentes financieros y elige Reenviar o Redirigir a la misma direccion privada.</li><li>Guarda la regla y espera el primer correo.</li></ol>:provider==="proton"?<ol><li>En Proton Mail abre la configuracion de reenvio o filtros de tu plan.</li><li>Reenvia los avisos financieros a la misma direccion privada de CapitalFlow.</li><li>Espera el primer correo para confirmar que la fuente esta activa.</li></ol>:<ol><li>Crea una regla de reenvio hacia la misma direccion privada.</li><li>Limita la regla a remitentes financieros cuando tu proveedor lo permita.</li><li>Espera el primer correo para confirmar la conexion.</li></ol>;
-  return <article className="integration-card" style={{display:"grid",gap:"1rem"}} aria-labelledby="email-relay-title">
-    <div><h2 id="email-relay-title">Correo financiero automatico</h2><p className="muted">Una sola direccion privada de CapitalFlow puede recibir reenvios desde varios correos: Gmail, Outlook, Proton Mail y otros. Todos llegan al mismo punto de ingesta y al mismo parser financiero.</p></div>
-    <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}><strong>Estado general:</strong><span>{labels[state.state]}</span>{state.lastReceivedAt?<span className="muted">Ultimo correo: {new Date(state.lastReceivedAt).toLocaleString()}</span>:null}</div>
-    {state.address?<div><strong>Direccion compartida para todos tus correos</strong><div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}><code style={{wordBreak:"break-all"}}>{state.address}</code><button type="button" onClick={()=>void copy(state.address!)}>Copiar</button></div><p className="muted">Usa exactamente esta misma direccion como destino de reenvio en cada proveedor que agregues.</p></div>:state.aliasHint?<p>Direccion configurada: <code>cf+{state.aliasHint}@{state.domain ?? "dominio-de-ingesta"}</code>. Por seguridad el token completo solo se muestra al crear o rotar la direccion.</p>:null}
-    {state.state==="NOT_CONFIGURED"||state.state==="REVOKED"?<button type="button" disabled={busy} onClick={()=>void generate("generate")}>Generar direccion privada compartida</button>:<div style={{display:"flex",gap:8,flexWrap:"wrap"}}><button type="button" disabled={busy} onClick={()=>void generate("rotate")}>Rotar direccion</button><button type="button" disabled={busy} onClick={()=>void revoke()}>Revocar toda la ingesta por correo</button></div>}
-    {state.aliasHint||state.address?<section style={{display:"grid",gap:10}}><h3>Correos conectados</h3>
-      {(state.sources ?? []).length?<div style={{display:"grid",gap:8}}>{(state.sources ?? []).map((source)=><div key={source.id} style={{border:"1px solid var(--border, #ddd)",padding:10,borderRadius:8}}><div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}><strong>{source.label}</strong><span>{providerNames[source.provider]}</span><span>{labels[source.state]}</span><button type="button" disabled={busy} onClick={()=>void revokeSource(source.id)}>Revocar esta fuente</button></div>{source.lastReceivedAt?<small>Ultimo correo: {new Date(source.lastReceivedAt).toLocaleString()}</small>:null}{source.gmailConfirmationUrl?<p><a href={source.gmailConfirmationUrl} target="_blank" rel="noreferrer">Abrir confirmacion segura de Gmail</a>{source.gmailConfirmationCode?<>. Codigo: <code>{source.gmailConfirmationCode}</code></>:null}</p>:null}</div>)}</div>:<p className="muted">Aun no has registrado fuentes. Puedes agregar varias y todas usaran la misma direccion.</p>}
-      <div style={{display:"grid",gap:8}}><strong>Agregar otro correo</strong><label>Proveedor<select value={provider} onChange={(e)=>setProvider(e.target.value as SourceProvider)} disabled={busy} style={{display:"block",marginTop:6}}><option value="gmail">Gmail</option><option value="outlook">Outlook / Hotmail</option><option value="proton">Proton Mail</option><option value="other">Otro</option></select></label><label>Nombre opcional<input value={sourceLabel} onChange={(e)=>setSourceLabel(e.target.value)} placeholder={`${providerNames[provider]} personal`} maxLength={80} style={{display:"block",marginTop:6}} /></label><button type="button" disabled={busy} onClick={()=>void addSource()}>Agregar fuente</button></div>
-      <div><strong>Configura el reenvio</strong>{providerGuide}</div>
-      <strong>Entidades habituales</strong><div style={{display:"flex",gap:10,flexWrap:"wrap"}}>{(state.catalog ?? []).map((item)=><label key={item.id}><input type="checkbox" checked={selected.includes(item.id)} onChange={(e)=>setSelected((prev)=>e.target.checked?[...prev,item.id]:prev.filter((x)=>x!==item.id))}/>{" "}{item.display_name}</label>)}</div>
-      {provider==="gmail"?<div><strong>Filtro sugerido de Gmail</strong><pre style={{whiteSpace:"pre-wrap",wordBreak:"break-word"}}>{gmailFilter}</pre>{domains.length?<button type="button" onClick={()=>void copy(gmailFilter)}>Copiar filtro</button>:null}</div>:null}
-      <p className="muted">No conectas la API ni compartes contrasenas. Gmail, Outlook y Proton son fuentes del mismo relay; no se habilitan como proveedores OAuth de CapitalFlow.</p>
-    </section>:null}
-    {state.state==="ACTIVE"?<p><strong>CapitalFlow esta recibiendo movimientos por correo automaticamente.</strong></p>:state.state==="VERIFICATION_PENDING"?<p>La direccion esta lista. El estado cambiara cuando llegue correo correctamente.</p>:null}
-    {message?<p role="status">{message}</p>:null}
-  </article>;
+type RelayState =
+  "NOT_CONFIGURED" | "VERIFICATION_PENDING" | "ACTIVE" | "ERROR" | "REVOKED";
+type SourceProvider = "gmail" | "outlook" | "proton" | "other";
+type CatalogItem = {
+  id: string;
+  display_name: string;
+  sender_domains: string[];
+  country_code: string | null;
+  sort_order: number;
+};
+type RelaySource = {
+  id: string;
+  provider: SourceProvider;
+  label: string;
+  state: RelayState;
+  lastReceivedAt?: string | null;
+  lastFinancialEventAt?: string | null;
+};
+type Verification = {
+  id: string;
+  sourceId: string | null;
+  sourceLabel: string | null;
+  provider: SourceProvider;
+  status: "pending" | "opened";
+  sender: string | null;
+  subject: string | null;
+  excerpt: string | null;
+  verificationUrl: string | null;
+  verificationCode: string | null;
+  receivedAt: string;
+  expiresAt: string;
+};
+type RelayResponse = {
+  state: RelayState;
+  address?: string | undefined;
+  aliasHint?: string | null;
+  domain?: string;
+  sources?: RelaySource[];
+  catalog?: CatalogItem[];
+  verifications?: Verification[];
+};
+const labels: Record<RelayState, string> = {
+  NOT_CONFIGURED: "No configurado",
+  VERIFICATION_PENDING: "Verificación pendiente",
+  ACTIVE: "Activo",
+  ERROR: "Error",
+  REVOKED: "Revocado",
+};
+const providerNames: Record<SourceProvider, string> = {
+  gmail: "Gmail",
+  outlook: "Outlook / Hotmail",
+  proton: "Proton Mail",
+  other: "Otro correo",
+};
+const guide = [
+  [
+    "Abre Gmail en un computador y haz clic en el ícono de Configuración (la tuerca) de la esquina superior derecha.",
+    "step-settings.svg",
+  ],
+  ["Haz clic en «Ver toda la configuración».", "step-see-all-settings.svg"],
+  ["Abre la pestaña «Reenvío y correo POP/IMAP».", "step-forwarding-tab.svg"],
+  [
+    "En la sección Reenvío, haz clic en «Agregar una dirección de reenvío».",
+    "step-add-forwarding-address.svg",
+  ],
+  [
+    "Pega tu dirección privada de CapitalFlow, que termina en @ingest.capitalflow.eu.cc, y continúa.",
+    "step-enter-capitalflow-address.svg",
+  ],
+  [
+    "Gmail enviará un mensaje de verificación. CapitalFlow lo detectará y lo mostrará aquí.",
+    "step-verification-inbox.svg",
+  ],
+  [
+    "Cuando aparezca la verificación, abre el enlace seguro o copia el código y completa la confirmación de Gmail.",
+    "step-verification-inbox.svg",
+  ],
+  [
+    "Regresa a Gmail y actualiza la configuración si es necesario.",
+    "step-forwarding-tab.svg",
+  ],
+  [
+    "No actives el reenvío global de todos los correos: usa el filtro financiero sugerido más abajo.",
+    "filter-forward-action.svg",
+  ],
+];
+export function EmailRelayCard() {
+  const [state, setState] = useState<RelayResponse>({
+    state: "NOT_CONFIGURED",
+    sources: [],
+  });
+  const [provider, setProvider] = useState<SourceProvider>("gmail");
+  const [sourceLabel, setSourceLabel] = useState("");
+  const [selected, setSelected] = useState<string[]>([]);
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+  const load = async () => {
+    try {
+      const data = await invokeFunction<RelayResponse>("email-relay-settings", {
+        action: "state",
+      });
+      setState((prev) => {
+        const next: RelayResponse = { ...data };
+        if (data.address === undefined && prev.address !== undefined)
+          next.address = prev.address;
+        return next;
+      });
+    } catch {
+      setMessage("No fue posible consultar el correo financiero automático.");
+    }
+  };
+  useEffect(() => {
+    void load();
+  }, []);
+  useEffect(() => {
+    if (!state.verifications?.length) return;
+    const id = window.setInterval(() => void load(), 15000);
+    return () => window.clearInterval(id);
+  }, [state.verifications?.length]);
+  const domains = useMemo(
+    () => [
+      ...new Set(
+        (state.catalog ?? [])
+          .filter((x) => selected.includes(x.id))
+          .flatMap((x) => x.sender_domains),
+      ),
+    ],
+    [state.catalog, selected],
+  );
+  const gmailFilter = domains.length
+    ? `from:(${domains.map((x) => `@${x}`).join(" OR ")})`
+    : "Selecciona entidades para generar el filtro.";
+  const act = async (action: string, extra: Record<string, unknown> = {}) => {
+    setBusy(true);
+    try {
+      const data = await invokeFunction<RelayResponse>("email-relay-settings", {
+        action,
+        ...extra,
+      });
+      if (
+        (action === "generate" || action === "rotate") &&
+        data.address !== undefined
+      )
+        setState((prev) => ({
+          ...prev,
+          ...data,
+          address: data.address,
+          sources: data.sources ?? [],
+        }));
+      else await load();
+      setMessage(
+        action === "revoke"
+          ? "Dirección y fuentes revocadas."
+          : "Estado actualizado.",
+      );
+    } catch {
+      setMessage("No fue posible completar la acción. Inténtalo de nuevo.");
+    } finally {
+      setBusy(false);
+    }
+  };
+  const copy = async (value: string, label: string) => {
+    try {
+      await navigator.clipboard.writeText(value);
+      setMessage(`${label} copiado.`);
+    } catch {
+      setMessage("No se pudo copiar. Selecciona el texto manualmente.");
+    }
+  };
+  return (
+    <article
+      className="integration-card relay-card"
+      aria-labelledby="email-relay-title"
+    >
+      <header className="relay-header">
+        <div>
+          <h2 id="email-relay-title">Correo financiero automático</h2>
+          <p className="muted">
+            Una dirección privada recibe avisos de Gmail, Outlook, Proton Mail u
+            otro correo, sin conectar la API de tu buzón.
+          </p>
+        </div>
+        <span className={`relay-status state-${state.state.toLowerCase()}`}>
+          {labels[state.state]}
+        </span>
+      </header>
+      {message ? (
+        <p className="notice relay-feedback" role="status" aria-live="polite">
+          {message}
+        </p>
+      ) : null}
+      {state.address ? (
+        <section className="relay-section private-address">
+          <h3>Guarda esta dirección ahora</h3>
+          <p>
+            Por tu seguridad, la dirección completa solo se muestra una vez.
+            Cópiala y guárdala en un gestor de contraseñas o en otro lugar
+            seguro.
+          </p>
+          <code>{state.address}</code>
+          <div className="button-row">
+            <button
+              className="secondary-button"
+              type="button"
+              onClick={() => void copy(state.address!, "Dirección")}
+            >
+              Copiar dirección
+            </button>
+          </div>
+        </section>
+      ) : state.aliasHint ? (
+        <section className="relay-section">
+          <h3>Dirección privada configurada</h3>
+          <code>
+            cf+{state.aliasHint}@{state.domain ?? "ingest.capitalflow.eu.cc"}
+          </code>
+          <p className="muted">
+            La dirección completa solo se muestra al crearla o rotarla.
+          </p>
+        </section>
+      ) : null}
+      {state.aliasHint || state.address || state.state === "REVOKED" ? (
+        <section className="notice relay-recovery">
+          <strong>¿Perdiste la dirección completa?</strong>
+          <ol>
+            <li>Haz clic en «Revocar toda la ingesta por correo».</li>
+            <li>Después usa «Rotar dirección» para crear una nueva.</li>
+            <li>
+              Copia inmediatamente la nueva dirección y guárdala de forma
+              segura.
+            </li>
+            <li>
+              Actualiza en Gmail, Outlook o Proton los reenvíos o filtros que
+              utilizaban la dirección anterior.
+            </li>
+          </ol>
+        </section>
+      ) : null}
+      <div className="button-row">
+        {state.state === "NOT_CONFIGURED" ? (
+          <button
+            className="primary-button"
+            type="button"
+            disabled={busy}
+            onClick={() => void act("generate")}
+          >
+            Generar dirección privada
+          </button>
+        ) : null}
+        {state.state !== "NOT_CONFIGURED" ? (
+          <button
+            className="secondary-button"
+            type="button"
+            disabled={busy}
+            onClick={() => void act("rotate")}
+          >
+            Rotar dirección
+          </button>
+        ) : null}
+        {state.state !== "NOT_CONFIGURED" && state.state !== "REVOKED" ? (
+          <button
+            className="danger-button"
+            type="button"
+            disabled={busy}
+            onClick={() => void act("revoke")}
+          >
+            Revocar toda la ingesta por correo
+          </button>
+        ) : null}
+      </div>
+      {state.aliasHint || state.address ? (
+        <section className="relay-section">
+          <h3>Correos financieros conectados</h3>
+          {(state.sources ?? []).length ? (
+            <div className="relay-source-list">
+              {state.sources?.map((source) => (
+                <article className="relay-source" key={source.id}>
+                  <div>
+                    <strong>{source.label}</strong>
+                    <span className="provider-badge">
+                      {providerNames[source.provider]}
+                    </span>
+                    <span
+                      className={`relay-status state-${source.state.toLowerCase()}`}
+                    >
+                      {labels[source.state]}
+                    </span>
+                    {source.lastReceivedAt ? (
+                      <small>
+                        Último correo:{" "}
+                        {new Date(source.lastReceivedAt).toLocaleString(
+                          "es-CO",
+                        )}
+                      </small>
+                    ) : null}
+                  </div>
+                  <button
+                    className="ghost-danger"
+                    type="button"
+                    disabled={busy}
+                    onClick={() =>
+                      void act("revoke_source", { sourceId: source.id })
+                    }
+                  >
+                    Revocar esta fuente
+                  </button>
+                </article>
+              ))}
+            </div>
+          ) : (
+            <p className="muted">
+              Aún no has agregado una fuente. Puedes agregar varias a la misma
+              dirección.
+            </p>
+          )}
+        </section>
+      ) : null}
+      {state.verifications?.length ? (
+        <section className="relay-section verification-inbox">
+          <h3>Verificaciones de reenvío</h3>
+          <p className="muted">
+            CapitalFlow nunca te pedirá tu contraseña de Gmail.
+          </p>
+          {state.verifications.map((v) => (
+            <article className="verification-card" key={v.id}>
+              <div>
+                <span className="provider-badge">
+                  {providerNames[v.provider]}
+                </span>
+                <strong>Verificación de reenvío recibida</strong>
+                <small>
+                  Recibida: {new Date(v.receivedAt).toLocaleString("es-CO")}
+                </small>
+                {v.excerpt ? <p>{v.excerpt}</p> : null}
+                {v.verificationCode ? (
+                  <p>
+                    Código: <code>{v.verificationCode}</code>
+                  </p>
+                ) : null}
+              </div>
+              <div className="button-row">
+                {v.verificationUrl ? (
+                  <a
+                    className="primary-button"
+                    href={v.verificationUrl}
+                    target="_blank"
+                    rel="noreferrer noopener"
+                    onClick={() =>
+                      void act("mark_verification_opened", {
+                        verificationId: v.id,
+                      })
+                    }
+                  >
+                    Abrir verificación
+                  </a>
+                ) : null}
+                {v.verificationCode ? (
+                  <button
+                    className="secondary-button"
+                    type="button"
+                    onClick={() => void copy(v.verificationCode!, "Código")}
+                  >
+                    Copiar código
+                  </button>
+                ) : null}
+                <button
+                  className="secondary-button"
+                  type="button"
+                  onClick={() =>
+                    void act("resolve_verification", { verificationId: v.id })
+                  }
+                >
+                  Ya confirmé el reenvío
+                </button>
+                <button
+                  className="ghost-danger"
+                  type="button"
+                  onClick={() =>
+                    void act("dismiss_verification", { verificationId: v.id })
+                  }
+                >
+                  Descartar
+                </button>
+              </div>
+            </article>
+          ))}
+        </section>
+      ) : null}
+      {state.aliasHint || state.address ? (
+        <section className="relay-section">
+          <h3>Agregar otro correo</h3>
+          <label className="field">
+            Proveedor
+            <select
+              value={provider}
+              onChange={(e) => setProvider(e.target.value as SourceProvider)}
+              disabled={busy}
+            >
+              <option value="gmail">Gmail</option>
+              <option value="outlook">Outlook / Hotmail</option>
+              <option value="proton">Proton Mail</option>
+              <option value="other">Otro</option>
+            </select>
+          </label>
+          <label className="field">
+            Nombre opcional
+            <input
+              value={sourceLabel}
+              onChange={(e) => setSourceLabel(e.target.value)}
+              maxLength={80}
+              placeholder={`${providerNames[provider]} personal`}
+            />
+          </label>
+          <button
+            className="primary-button"
+            type="button"
+            disabled={busy}
+            onClick={() =>
+              void act("add_source", {
+                provider,
+                label: sourceLabel.trim() || providerNames[provider],
+              })
+            }
+          >
+            Agregar fuente
+          </button>
+        </section>
+      ) : null}
+      <details className="relay-guide" open>
+        <summary>Configuración del reenvío</summary>
+        <ol className="guide-steps">
+          {guide.map(([text, image], i) => (
+            <li key={text as string}>
+              <img
+                loading="lazy"
+                src={`/guides/gmail-forwarding/${image}`}
+                alt={`Ilustración: ${text as string}`}
+              />
+              <span>
+                <strong>Paso {i + 1}</strong>
+                {text as string}
+              </span>
+            </li>
+          ))}
+        </ol>
+      </details>
+      <details className="relay-guide" open>
+        <summary>Filtros sugeridos para Gmail</summary>
+        <p>
+          Elige las entidades cuyos avisos financieros quieres enviar a
+          CapitalFlow. Crearemos un filtro para que Gmail reenvíe solo esos
+          mensajes.
+        </p>
+        <div className="catalog">
+          {(state.catalog ?? []).map((item) => (
+            <label key={item.id}>
+              <input
+                type="checkbox"
+                checked={selected.includes(item.id)}
+                onChange={() =>
+                  setSelected((prev) =>
+                    prev.includes(item.id)
+                      ? prev.filter((x) => x !== item.id)
+                      : [...prev, item.id],
+                  )
+                }
+              />
+              {item.display_name}
+            </label>
+          ))}
+        </div>
+        <code className="filter-query">{gmailFilter}</code>
+        <div className="button-row">
+          <button
+            className="secondary-button"
+            type="button"
+            disabled={!domains.length}
+            onClick={() => void copy(gmailFilter, "Filtro")}
+          >
+            Copiar filtro
+          </button>
+        </div>
+        <ol>
+          <li>Abre las opciones de búsqueda de Gmail y pega el criterio.</li>
+          <li>
+            Ejecuta una búsqueda primero para revisar qué mensajes coinciden.
+          </li>
+          <li>
+            Haz clic en «Crear filtro», selecciona «Reenviarlo a» y elige la
+            dirección de CapitalFlow ya verificada.
+          </li>
+        </ol>
+        <p className="notice">
+          Los filtros de Gmail se aplican a los mensajes nuevos. Revisa los
+          resultados de búsqueda antes de crear el filtro. No necesitas activar
+          el reenvío global de toda tu cuenta.
+        </p>
+      </details>
+    </article>
+  );
 }

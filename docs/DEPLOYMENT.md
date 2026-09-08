@@ -475,3 +475,7 @@ Required inputs by gate:
 - legal/privacy: public HTTPS `CF_PRIVACY_URL` and `CF_TERMS_URL` plus explicit human attestation `CF_LEGAL_APPROVED=true`, reviewer and approval date.
 
 `pilot-cors-runtime-release.sh` updates hosted `APP_URL`, computes the transitive Edge Function closure that imports `_shared/http.ts`, requires exactly 26 functions for this release, deploys them, and verifies allow/deny preflights. The Google Drive E2E intentionally leaves its two audit backup files in the consenting account's hidden `appDataFolder`; database credentials and the disposable CapitalFlow user are removed.
+
+## Financial Sources forwarding-verification release
+
+The `forwarding_verification_inbox` migration is additive and must be applied before the changed Email Relay Edge Functions. Deploy only `email-relay-ingest` and `email-relay-settings` when this feature changes, then promote the exact merged web SHA. The private verification inbox is service-only: browser access remains through authenticated ownership checks in `email-relay-settings`. Do not log or export its temporary links, codes, or excerpts.

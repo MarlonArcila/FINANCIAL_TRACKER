@@ -61,3 +61,7 @@ A task is done only when its acceptance criteria pass, type checking succeeds, r
 - Current repository state, live CLI help, official vendor docs, and live remote state outrank old handoffs, old repair scripts, or chat history.
 - Older Gmail OAuth/Android onboarding text is historical/backend context and must not re-expose those integrations without an explicit new product decision.
 - Automation must use an isolated workspace, accept equivalent safe states, and reject unrelated tracked mutations rather than requiring a transient tool side effect.
+
+## Financial Sources verification inbox
+
+Treat forwarding confirmations as temporary, non-financial setup material. The browser may retrieve them only through the authenticated `email-relay-settings` boundary; never add direct client access to the private table, persist relay tokens, or render arbitrary message links/HTML. See `docs/RELEASE_CONTRACT.md` for migration/functions/web release order.
