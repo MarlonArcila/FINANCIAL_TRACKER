@@ -1,13 +1,13 @@
 import { sha256Base64Url } from "../_shared/crypto.ts";
-import { requiredEnv } from "../_shared/env.ts";
+import { optionalEnv, requiredEnv } from "../_shared/env.ts";
 import { parseMailMessage } from "../_shared/financial-parser.ts";
 import {
   decodeBase64Bytes,
   detectForwardingVerification,
   EMAIL_RELAY_MAX_RAW_BYTES,
   extractAliasToken,
-  extractMailContent,
   extractGmailForwardingMailbox,
+  extractMailContent,
   providerEvidence,
   sanitizeRelayHeader,
   sha256Hex,
@@ -48,8 +48,9 @@ function relayAliasRow(value: unknown): RelayAliasRow {
     typeof row.alias_id !== "string" ||
     typeof row.user_id !== "string" ||
     typeof row.connection_id !== "string"
-  )
+  ) {
     throw new HttpError(500, "relay_alias_contract_invalid");
+  }
   return {
     alias_id: row.alias_id,
     user_id: row.user_id,
@@ -59,34 +60,50 @@ function relayAliasRow(value: unknown): RelayAliasRow {
 function relaySourceMatchRow(value: unknown): RelaySourceMatchRow {
   const row = record(value);
   const sourceId = typeof row.source_id === "string" ? row.source_id : null;
-  const matchStatus =
-    typeof row.match_status === "string" ? row.match_status : "unknown";
+  const matchStatus = typeof row.match_status === "string"
+    ? row.match_status
+    : "unknown";
   return { source_id: sourceId, match_status: matchStatus };
 }
 function providerHint(value: unknown): SourceProvider {
   return value === "gmail" ||
-    value === "outlook" ||
-    value === "proton" ||
-    value === "other"
+      value === "outlook" ||
+      value === "proton" ||
+      value === "other"
     ? value
     : "other";
 }
 
 Deno.serve(async (request) => {
   try {
-    if (request.method !== "POST")
+    if (request.method !== "POST") {
       throw new HttpError(405, "method_not_allowed");
+    }
     const length = Number(request.headers.get("content-length") ?? "0");
-    if (Number.isFinite(length) && length > 800_000)
+    if (Number.isFinite(length) && length > 800_000) {
       throw new HttpError(413, "request_too_large");
+    }
     const rawBody = await request.text();
-    if (new TextEncoder().encode(rawBody).length > 800_000)
+    if (new TextEncoder().encode(rawBody).length > 800_000) {
       throw new HttpError(413, "request_too_large");
+    }
     const timestamp = request.headers.get("x-capitalflow-timestamp") ?? "";
     const nonce = request.headers.get("x-capitalflow-nonce") ?? "";
     const signature = request.headers.get("x-capitalflow-signature") ?? "";
+    const keyId = request.headers.get("x-capitalflow-key-id");
+    const currentSecret = requiredEnv("CAPITALFLOW_EMAIL_RELAY_HMAC_SECRET");
+    const previousSecret = optionalEnv(
+      "CAPITALFLOW_EMAIL_RELAY_HMAC_PREVIOUS_SECRET",
+    );
+    if (keyId && keyId !== "current" && keyId !== "previous") {
+      throw new HttpError(401, "unknown_relay_key_id");
+    }
     await verifyRelaySignature({
-      secret: requiredEnv("CAPITALFLOW_EMAIL_RELAY_HMAC_SECRET"),
+      secrets: keyId === "current"
+        ? [currentSecret]
+        : keyId === "previous"
+        ? (previousSecret ? [previousSecret] : [])
+        : [currentSecret, ...(previousSecret ? [previousSecret] : [])],
       timestamp,
       nonce,
       signature,
@@ -137,31 +154,37 @@ Deno.serve(async (request) => {
     if (rateError) throw rateError;
     if (!allowed) throw new HttpError(429, "relay_rate_limited");
 
-    const rawMime =
-      typeof body.rawMimeBase64 === "string" ? body.rawMimeBase64 : "";
-    if (!rawMime || rawMime.length > 740_000)
+    const rawMime = typeof body.rawMimeBase64 === "string"
+      ? body.rawMimeBase64
+      : "";
+    if (!rawMime || rawMime.length > 740_000) {
       throw new HttpError(413, "relay_message_too_large");
+    }
     const rawBytes = decodeBase64Bytes(rawMime);
-    if (rawBytes.byteLength > EMAIL_RELAY_MAX_RAW_BYTES)
+    if (rawBytes.byteLength > EMAIL_RELAY_MAX_RAW_BYTES) {
       throw new HttpError(413, "relay_message_too_large");
+    }
     const computedHash = await sha256Hex(rawBytes);
     if (
       typeof body.rawSha256 !== "string" ||
       body.rawSha256.toLowerCase() !== computedHash
-    )
+    ) {
       throw new HttpError(422, "relay_raw_hash_mismatch");
+    }
     const messageId = sanitizeRelayHeader(body.messageId, 998);
     const envelopeSender = sanitizeRelayHeader(body.envelopeSender, 320);
     const from = sanitizeRelayHeader(body.from, 998);
     const subject = sanitizeRelayHeader(body.subject, 998);
-    const receivedAt =
-      typeof body.receivedAt === "string" &&
-      !Number.isNaN(Date.parse(body.receivedAt))
-        ? new Date(body.receivedAt).toISOString()
-        : new Date().toISOString();
-    const parsedDate = typeof body.date === "string" ? Date.parse(body.date) : Number.NaN;
+    const receivedAt = typeof body.receivedAt === "string" &&
+        !Number.isNaN(Date.parse(body.receivedAt))
+      ? new Date(body.receivedAt).toISOString()
+      : new Date().toISOString();
+    const parsedDate = typeof body.date === "string"
+      ? Date.parse(body.date)
+      : Number.NaN;
     const receivedMs = Date.parse(receivedAt);
-    const occurredAt = Number.isFinite(parsedDate) && Math.abs(parsedDate - receivedMs) <= 366 * 24 * 60 * 60 * 1000
+    const occurredAt = Number.isFinite(parsedDate) &&
+        Math.abs(parsedDate - receivedMs) <= 366 * 24 * 60 * 60 * 1000
       ? new Date(parsedDate).toISOString()
       : receivedAt;
     // Entitlement is intentionally checked before MIME extraction or source-event body storage.
@@ -170,7 +193,10 @@ Deno.serve(async (request) => {
       await assertEntitled(service, alias.user_id);
     } catch (error) {
       if (!(error instanceof HttpError) || error.status !== 402) throw error;
-      return json({ accepted: true, financial: false, entitlement: "inactive" }, 202);
+      return json(
+        { accepted: true, financial: false, entitlement: "inactive" },
+        202,
+      );
     }
     const rawText = new TextDecoder("utf-8", { fatal: false }).decode(rawBytes);
     const content = extractMailContent(rawText);
@@ -195,23 +221,44 @@ Deno.serve(async (request) => {
         2000,
       ),
     });
-    const linkChallenge = /\bCapitalFlow\s+prueba\s+(CF-[A-Z0-9_-]{8,64})\b/iu.exec((detectedSubject ?? "") + "\n" + text)?.[1] ?? null;
+    const linkChallenge =
+      /\bCapitalFlow\s+prueba\s+(CF-[A-Z0-9_-]{8,64})\b/iu.exec(
+        (detectedSubject ?? "") + "\n" + text,
+      )?.[1] ?? null;
     const linkEvidence = providerEvidence({
       providerHint: sourceProvider,
       subject: detectedSubject,
       text,
       envelopeSender,
       from,
-      authenticationResults: sanitizeRelayHeader(record(body.authentication).authenticationResults, 4000),
-      receivedSpf: sanitizeRelayHeader(record(body.authentication).receivedSpf, 2000),
+      authenticationResults: sanitizeRelayHeader(
+        record(body.authentication).authenticationResults,
+        4000,
+      ),
+      receivedSpf: sanitizeRelayHeader(
+        record(body.authentication).receivedSpf,
+        2000,
+      ),
     });
-    if (linkChallenge && linkEvidence.level === "strong" && linkEvidence.provider !== "other") {
+    if (
+      linkChallenge && linkEvidence.level === "strong" &&
+      linkEvidence.provider !== "other"
+    ) {
       const { data: completedTest, error: linkTestError } = await service.rpc(
         "service_complete_email_relay_link_test",
-        { p_alias_id: alias.alias_id, p_provider: linkEvidence.provider, p_challenge_hash: await sha256Base64Url(linkChallenge) },
+        {
+          p_alias_id: alias.alias_id,
+          p_provider: linkEvidence.provider,
+          p_challenge_hash: await sha256Base64Url(linkChallenge),
+        },
       );
       if (linkTestError) throw linkTestError;
-      if (completedTest) return json({ accepted: true, financial: false, linkTest: "received" }, 202);
+      if (completedTest) {
+        return json(
+          { accepted: true, financial: false, linkTest: "received" },
+          202,
+        );
+      }
     }
     const auth = record(body.authentication);
     const evidence = providerEvidence({
@@ -220,24 +267,27 @@ Deno.serve(async (request) => {
       text,
       envelopeSender,
       from,
-      authenticationResults: sanitizeRelayHeader(auth.authenticationResults, 4000),
+      authenticationResults: sanitizeRelayHeader(
+        auth.authenticationResults,
+        4000,
+      ),
       receivedSpf: sanitizeRelayHeader(auth.receivedSpf, 2000),
     });
     const metadata = verification
       ? {
-          relay_version: "email-relay-v2-multi-source",
-          event_type: "forwarding_verification",
-          provider: verification.provider,
-          source_match_status: sourceMatch.match_status,
-        }
+        relay_version: "email-relay-v2-multi-source",
+        event_type: "forwarding_verification",
+        provider: verification.provider,
+        source_match_status: sourceMatch.match_status,
+      }
       : {
-          relay_version: "email-relay-v2-multi-source",
-          forwarding_provider_hint: sourceProvider,
-          source_match_status: sourceMatch.match_status,
-          provider_evidence: evidence.level,
-          provider_evidence_reason: evidence.reason,
-          original_sender_auth: evidence.level,
-        };
+        relay_version: "email-relay-v2-multi-source",
+        forwarding_provider_hint: sourceProvider,
+        source_match_status: sourceMatch.match_status,
+        provider_evidence: evidence.level,
+        provider_evidence_reason: evidence.reason,
+        original_sender_auth: evidence.level,
+      };
     const sourcePayload = {
       user_id: alias.user_id,
       connection_id: alias.connection_id,
@@ -267,8 +317,9 @@ Deno.serve(async (request) => {
       .select("id")
       .single();
     if (sourceError) {
-      if (sourceError.code === "23505")
+      if (sourceError.code === "23505") {
         return json({ accepted: true, duplicate: true }, 202);
+      }
       throw sourceError;
     }
 
@@ -297,10 +348,20 @@ Deno.serve(async (request) => {
       const detectedMatch = relaySourceMatchRow(detectedMatchData);
       sourceId = detectedMatch.source_id;
       if (!sourceId) {
-        const sourceEmail = verification.provider === "gmail" ? extractGmailForwardingMailbox(text, domain) : null;
-        const { data: createdSource, error: createdSourceError } = await service.rpc("service_upsert_email_relay_source_from_inbound", { p_user_id: alias.user_id, p_alias_id: alias.alias_id, p_provider: verification.provider, p_source_email: sourceEmail });
+        const sourceEmail = verification.provider === "gmail"
+          ? extractGmailForwardingMailbox(text, domain)
+          : null;
+        const { data: createdSource, error: createdSourceError } = await service
+          .rpc("service_upsert_email_relay_source_from_inbound", {
+            p_user_id: alias.user_id,
+            p_alias_id: alias.alias_id,
+            p_provider: verification.provider,
+            p_source_email: sourceEmail,
+          });
         if (createdSourceError) throw createdSourceError;
-        sourceId = typeof createdSource === "string" ? createdSource : (record(createdSource).source_id as string | undefined) ?? null;
+        sourceId = typeof createdSource === "string"
+          ? createdSource
+          : (record(createdSource).source_id as string | undefined) ?? null;
       }
       if (detectedMatch.match_status === "revoked") {
         await service
@@ -337,10 +398,12 @@ Deno.serve(async (request) => {
         p_provider_hint: verification.provider,
         p_status: "pending",
         p_financial: false,
-        p_gmail_url:
-          verification.provider === "gmail" ? verification.url : null,
-        p_gmail_code:
-          verification.provider === "gmail" ? verification.code : null,
+        p_gmail_url: verification.provider === "gmail"
+          ? verification.url
+          : null,
+        p_gmail_code: verification.provider === "gmail"
+          ? verification.code
+          : null,
       });
       if (error) throw error;
       const { error: inboxError } = await service.rpc(
@@ -425,15 +488,17 @@ Deno.serve(async (request) => {
         },
       })
       .eq("id", source.id);
-    if (evidence.level === "strong" && sourceId) await service.rpc("service_update_email_relay_state", {
-      p_alias_id: alias.alias_id,
-      p_source_id: sourceId,
-      p_provider_hint: sourceProvider,
-      p_status: "active",
-      p_financial: true,
-      p_gmail_url: null,
-      p_gmail_code: null,
-    });
+    if (evidence.level === "strong" && sourceId) {
+      await service.rpc("service_update_email_relay_state", {
+        p_alias_id: alias.alias_id,
+        p_source_id: sourceId,
+        p_provider_hint: sourceProvider,
+        p_status: "active",
+        p_financial: true,
+        p_gmail_url: null,
+        p_gmail_code: null,
+      });
+    }
     return json(
       {
         accepted: true,
