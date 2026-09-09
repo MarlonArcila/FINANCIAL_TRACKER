@@ -18,7 +18,7 @@ select ok(not has_function_privilege('anon','public.service_resolve_email_relay_
 select ok(not has_function_privilege('authenticated','public.service_resolve_email_relay_alias(text)','execute'),'authenticated cannot resolve relay alias');
 select ok(has_function_privilege('service_role','public.service_resolve_email_relay_alias(text)','execute'),'service role can resolve relay alias');
 select ok(has_function_privilege('service_role','public.service_list_email_relay_sources(uuid)','execute'),'service role can list relay sources');
-select ok(has_function_privilege('service_role','public.service_match_email_relay_source(uuid,text)','execute'),'service role can match a relay source');
+select ok(has_function_privilege('service_role','public.service_match_email_relay_source(uuid,text,text)','execute'),'service role can match a relay source');
 select ok(has_function_privilege('service_role','public.service_claim_email_relay_replay(text,timestamp with time zone)','execute'),'service role can claim replay nonce');
 
 insert into auth.users(id,email) values
@@ -35,9 +35,9 @@ select lives_ok($$select * from public.service_create_email_relay_source('000000
 select lives_ok($$select * from public.service_create_email_relay_source('00000000-0000-4000-8000-000000009101','proton','Proton privado')$$,'Proton source can share alias A');
 select is((select count(*)::integer from public.service_list_email_relay_sources('00000000-0000-4000-8000-000000009101')),3,'one user can configure three mail sources');
 select is((select count(distinct alias_id)::integer from public.service_list_email_relay_sources('00000000-0000-4000-8000-000000009101')),1,'all three mail sources share one primary alias');
-select is((select match_status from public.service_match_email_relay_source((select alias_id from public.service_resolve_email_relay_alias('aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa')),'gmail')),'matched','Gmail maps to the shared alias source');
-select is((select match_status from public.service_match_email_relay_source((select alias_id from public.service_resolve_email_relay_alias('aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa')),'outlook')),'matched','Outlook maps to the shared alias source');
-select is((select match_status from public.service_match_email_relay_source((select alias_id from public.service_resolve_email_relay_alias('aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa')),'proton')),'matched','Proton maps to the shared alias source');
+select is((select match_status from public.service_match_email_relay_source((select alias_id from public.service_resolve_email_relay_alias('aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa')),'gmail',null)),'matched_unambiguous','Gmail maps to the shared alias source');
+select is((select match_status from public.service_match_email_relay_source((select alias_id from public.service_resolve_email_relay_alias('aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa')),'outlook',null)),'matched_unambiguous','Outlook maps to the shared alias source');
+select is((select match_status from public.service_match_email_relay_source((select alias_id from public.service_resolve_email_relay_alias('aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa')),'proton',null)),'matched_unambiguous','Proton maps to the shared alias source');
 select is(public.service_claim_email_relay_replay('nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn',now()+interval '10 minutes'),true,'first relay nonce is accepted');
 select is(public.service_claim_email_relay_replay('nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn',now()+interval '10 minutes'),false,'replayed relay nonce is rejected');
 select lives_ok($$select * from public.service_create_or_rotate_email_relay_alias('00000000-0000-4000-8000-000000009101','ccccccccccccccccccccccccccccccccccccccccccc','cccc...cccc')$$,'user A alias can be rotated');
@@ -47,7 +47,7 @@ select is((select count(*)::integer from public.service_list_email_relay_sources
 select lives_ok($$select * from public.service_create_email_relay_source('00000000-0000-4000-8000-000000009101','gmail','Gmail nuevo')$$,'new Gmail source can be registered after rotation');
 select lives_ok($$select * from public.service_create_email_relay_source('00000000-0000-4000-8000-000000009101','outlook','Outlook nuevo')$$,'new Outlook source can be registered after rotation');
 select lives_ok($$select public.service_revoke_email_relay_source('00000000-0000-4000-8000-000000009101',(select source_id from public.service_list_email_relay_sources('00000000-0000-4000-8000-000000009101') where provider='gmail' limit 1))$$,'one mail source can be revoked independently');
-select is((select match_status from public.service_match_email_relay_source((select alias_id from public.service_resolve_email_relay_alias('ccccccccccccccccccccccccccccccccccccccccccc')),'gmail')),'revoked','revoked provider is distinguishable without revoking the shared alias');
+select is((select match_status from public.service_match_email_relay_source((select alias_id from public.service_resolve_email_relay_alias('ccccccccccccccccccccccccccccccccccccccccccc')),'gmail',null)),'revoked','revoked provider is distinguishable without revoking the shared alias');
 select is((select count(*)::integer from public.service_resolve_email_relay_alias('ccccccccccccccccccccccccccccccccccccccccccc')),1,'revoking one source does not revoke the shared alias');
 select is((select count(*)::integer from public.service_list_email_relay_sources('00000000-0000-4000-8000-000000009101') where provider='outlook'),1,'other sources remain active after one source is revoked');
 select lives_ok($$select public.service_revoke_email_relay_alias('00000000-0000-4000-8000-000000009102')$$,'user B alias can be revoked');
