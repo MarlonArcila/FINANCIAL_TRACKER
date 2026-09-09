@@ -107,6 +107,7 @@ begin
   else return query select null::uuid,'unconfigured'::text; end if;
 end $$;
 
+drop function if exists public.service_upsert_email_relay_source_from_inbound(uuid,uuid,text,text);
 create or replace function public.service_upsert_email_relay_source_from_inbound(p_user_id uuid,p_alias_id uuid,p_provider text,p_source_email text)
 returns table(source_id uuid,match_status text)
 language plpgsql security invoker set search_path='' as $$
