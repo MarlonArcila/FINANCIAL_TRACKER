@@ -97,3 +97,14 @@ When this surface changes, release in compatibility order: merge additive migrat
 ## 9. Email Routing prerequisite
 
 The relay contract requires Cloudflare Email Routing to be enabled and ready for `ingest.capitalflow.eu.cc`, with subaddressing enabled, and a `cf@ingest.capitalflow.eu.cc` routing rule targeting `capitalflow-email-relay`. The worker must preserve the `cf+TOKEN` recipient detail without logging it. The authenticated release doctor/operator must verify these live facts before a real forwarding UAT; static CI verifies this contract but never stores Cloudflare credentials.
+
+
+## 10. Email Relay V4 security and linking contract
+
+- A provider selection is a short-lived private setup intent, never a trusted source. Sources are registered only from authenticated inbound evidence; the current safety model limits a shared alias to one active source per provider until reliable per-account evidence is available.
+- The browser receives one normalized verification action only: safe_url, code, safe_url_and_code, or instructions_only. It may mark an action opened or dismiss it, but cannot resolve provider verification or activate a source.
+- Provider hints are diagnostic only. A clickable verification action requires authenticated provider evidence and a narrow HTTPS confirmation path; no verification URL is prefetched.
+- A source becomes active only after a forwarding-path proof. Direct mail to the alias, non-financial mail, inactive subscription traffic, and browser clicks cannot activate it. Inactive subscription traffic is rejected before MIME parsing/body persistence.
+- Verification URL/code/excerpt are temporary: max seven days, cleared on dismissal/expiry/revocation. Raw MIME is transient only; parsed body storage is bounded and operational metadata never includes a verification URL, code, or alias token.
+- The Worker has an HTTPS Supabase gateway allowlist, HMAC nonce/timestamp signing, bounded payload and fetch timeout. x-capitalflow-key-id is sent for an overlap-ready HMAC rotation; do not rotate a production secret merely for a code release.
+- Release order remains: merge, additive migration, deploy changed relay Edge Functions, deploy Worker if changed, exact merged Vercel production deployment, then smoke. Manual Gmail confirmation and link-test UAT is last.

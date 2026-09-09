@@ -82,10 +82,11 @@ must(
   "gateway reuses entitlement parser and ingestion pipeline",
 );
 must(
-  gateway.includes("error.status !== 402") &&
-    gateway.includes("subscription_inactive"),
-  "only inactive entitlement is converted into a non-processing relay event",
+  gateway.indexOf("await assertEntitled(service, alias.user_id)") < gateway.indexOf("extractMailContent(rawText)") &&
+    !gateway.includes("subscription_inactive"),
+  "inactive entitlement is checked before MIME/body retention and cannot activate a source",
 );
+
 must(
   worker.includes("detectForwardingProvider") &&
     worker.includes("forwardingProviderHint"),
@@ -195,12 +196,13 @@ if (inboxMigration) {
   );
 }
 must(
-  relayShared.includes("detectForwardingVerification") &&
-    relayShared.includes("allowed(provider") &&
-    relayShared.includes('u.protocol === "https:"') &&
-    relayShared.includes("protonmail.com"),
-  "generic detector only permits HTTPS Google verification links",
+  relayShared.includes("safeProviderVerificationUrl") &&
+    relayShared.includes("providerEvidence") &&
+    relayShared.includes('u.protocol !== "https:"') &&
+    relayShared.includes("transport_hint_only"),
+  "verification policy centralizes HTTPS paths and rejects unauthenticated provider hints",
 );
+
 must(
   gateway.includes("const verification = detectForwardingVerification") &&
     gateway.includes("text_sanitized: verification\n") &&
@@ -208,7 +210,7 @@ must(
   "verification messages bypass financial parsing and avoid generic secret persistence",
 );
 must(
-  ui.includes("Vincular correo") && ui.includes("action.kind") && ui.includes('rel="noopener noreferrer"'),
+  ui.includes("Vincular correo") && ui.includes("action?.url") && ui.includes('rel="noopener noreferrer"'),
   "UI renders an owner-scoped safe verification inbox",
 );
 must(
@@ -216,7 +218,7 @@ must(
   "UI preserves one-time alias reveal and recovery flow",
 );
 must(
-  ui.includes("relay-modal") && ui.includes("Vincular correo") && ui.includes("setup-assistant"),
+  ui.includes("relay-dialog") && ui.includes("select_provider") && ui.includes("setup-assistant") && !ui.includes("add_source"),
   "UI provides provider-aware linking actions and an interactive setup assistant",
 );
 must(
@@ -224,8 +226,17 @@ must(
   "pending sources poll even without verification rows and refresh on return",
 );
 must(
-  ui.includes("Filtros y reglas financieras") && ui.includes("No necesitas activar el reenvío global"),
+  ui.includes("Filtros sugeridos para Gmail") && ui.includes("No necesitas activar") && ui.includes("CapitalFlow no importa correos antiguos"),
   "UI provides Gmail forwarding and financial-filter guidance",
+);
+
+must(
+  ui.split("\n").length > 350 &&
+    !ui.includes("Nombre opcional") &&
+    !ui.includes("Agregar otro correo") &&
+    !read("supabase/functions/email-relay-settings/index.ts").includes('action === "resolve_verification"') &&
+    read("supabase/functions/email-relay-settings/index.ts").includes("manual_trusted_source_creation_removed"),
+  "TEST_GUARDRAILS_NOT_WEAKENED: readable UI and browser authority regressions are guarded",
 );
 
 if (process.exitCode) process.exit(process.exitCode);

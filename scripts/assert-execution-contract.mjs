@@ -144,7 +144,8 @@ must(
 );
 must(
   relayCard.includes("Vincular correo") &&
-    relayCard.includes("Filtros y reglas financieras") &&
+    relayCard.includes("Configuración del reenvío") &&
+    relayCard.includes("Filtros sugeridos para Gmail") &&
     relayCard.includes("Confirmación recibida"),
   "financial-sources guide and verification inbox are present",
 );

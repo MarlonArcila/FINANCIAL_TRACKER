@@ -819,3 +819,12 @@ td strong, td small { display: block; }
 .setup-progress-step-5 {
   width: 100%;
 }
+
+/* Financial Sources V4: provider choice is an accessible, local setup-intent launcher. */
+.relay-dialog-backdrop { position: fixed; inset: 0; z-index: 30; display: grid; place-items: center; padding: 1rem; background: rgba(15, 23, 42, 0.52); }
+.relay-dialog { width: min(100%, 34rem); max-height: calc(100dvh - 2rem); overflow: auto; padding: 1.25rem; border: 1px solid var(--line); border-radius: 16px; background: var(--surface); box-shadow: var(--shadow); }
+.relay-dialog:focus-within { outline: 3px solid color-mix(in srgb, var(--brand) 35%, transparent); }
+.relay-dialog .button-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.relay-source small { overflow-wrap: anywhere; }
+@media (max-width: 360px) { .relay-dialog .button-row { grid-template-columns: 1fr; } .relay-card { min-width: 0; } .relay-card code { max-width: 100%; } }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; } }

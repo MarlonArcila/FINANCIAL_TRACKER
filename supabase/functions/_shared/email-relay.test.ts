@@ -1,7 +1,6 @@
 import { assertEquals, assertRejects } from "jsr:@std/assert@1";
 import {
   detectForwardingVerification,
-  detectGmailForwardingConfirmation,
   extractMailContent,
   extractAliasToken,
   extractTextFromMime,
@@ -40,11 +39,13 @@ Deno.test("MIME extraction ignores html execution and yields text", () => {
   );
   assertEquals(extractTextFromMime(raw).includes("alert(1)"), false);
 });
-Deno.test("Gmail confirmation accepts only google https links", () => {
-  const hit = detectGmailForwardingConfirmation(
-    "Gmail Forwarding Confirmation",
-    "Confirm https://mail-settings.google.com/mail/vf-test code 12345678",
-  );
+Deno.test("Gmail confirmation requires authenticated Google transport and accepts a narrow HTTPS action", () => {
+  const hit = detectForwardingVerification({
+    providerHint: "gmail",
+    authenticationResults: "dkim=pass header.d=google.com",
+    subject: "Gmail Forwarding Confirmation",
+    text: "Confirm https://mail-settings.google.com/mail/vf-test code 12345678",
+  });
   assertEquals(hit?.url?.startsWith("https://mail-settings.google.com/"), true);
 });
 Deno.test("quoted-printable UTF-8 remains parseable", () => {
@@ -180,14 +181,8 @@ Deno.test("relay semantic dedup never crosses alias boundaries", () => {
 Deno.test(
   "generic forwarding detector accepts English and Spanish Gmail confirmations",
   () => {
-    const english = detectForwardingVerification(
-      "Gmail forwarding confirmation",
-      "Confirm forwarding: https://mail-settings.google.com/mail/vf-test code 12345678",
-    );
-    const spanish = detectForwardingVerification(
-      "Confirmación de reenvío de Gmail",
-      "Completa la confirmación en https://accounts.google.com/forwarding/test Código 87654321",
-    );
+    const english = detectForwardingVerification({ providerHint: "gmail", authenticationResults: "dkim=pass header.d=google.com", subject: "Gmail forwarding confirmation", text: "Confirm forwarding: https://mail-settings.google.com/mail/vf-test code 12345678" });
+    const spanish = detectForwardingVerification({ providerHint: "gmail", authenticationResults: "spf=pass smtp.mailfrom=google.com", subject: "Confirmación de reenvío de Gmail", text: "Completa la confirmación en https://accounts.google.com/forwarding/test Código 87654321" });
     assertEquals(english?.provider, "gmail");
     assertEquals(
       english?.url?.startsWith("https://mail-settings.google.com/"),
@@ -200,30 +195,18 @@ Deno.test(
   "forwarding detector rejects unsafe URLs and accepts a bounded code-only confirmation",
   () => {
     assertEquals(
-      detectForwardingVerification(
-        "Gmail forwarding confirmation",
-        "Confirm at http://evil.example/verify",
-      )?.action.kind,
+      detectForwardingVerification({ providerHint: "gmail", authenticationResults: "dkim=pass header.d=google.com", subject: "Gmail forwarding confirmation", text: "Confirm at http://evil.example/verify", })?.action.kind,
       "instructions_only",
     );
     assertEquals(
-      detectForwardingVerification(
-        "Gmail forwarding confirmation",
-        "Confirm at javascript:alert(1)",
-      )?.url,
+      detectForwardingVerification({ providerHint: "gmail", authenticationResults: "dkim=pass header.d=google.com", subject: "Gmail forwarding confirmation", text: "Confirm at javascript:alert(1)", })?.url,
       null,
     );
     assertEquals(
-      detectForwardingVerification(
-        "Gmail forwarding confirmation",
-        "Confirm at data:text/plain,no",
-      )?.url,
+      detectForwardingVerification({ providerHint: "gmail", authenticationResults: "dkim=pass header.d=google.com", subject: "Gmail forwarding confirmation", text: "Confirm at data:text/plain,no", })?.url,
       null,
     );
-    const codeOnly = detectForwardingVerification(
-      "Confirmación de reenvío Gmail",
-      "Código de verificación: ABCD-1234",
-    );
+    const codeOnly = detectForwardingVerification({ providerHint: "gmail", authenticationResults: "dkim=pass header.d=google.com", subject: "Confirmación de reenvío Gmail", text: "Código de verificación: ABCD-1234", });
     assertEquals(codeOnly?.url, null);
     assertEquals(codeOnly?.code, "ABCD-1234");
   },
@@ -249,6 +232,7 @@ Deno.test(
     const content = extractMailContent(raw);
     const hit = detectForwardingVerification({
       providerHint: "gmail",
+      authenticationResults: "dkim=pass header.d=google.com",
       subject: content.subject,
       text: content.text,
       links: content.htmlLinks,
@@ -265,6 +249,7 @@ Deno.test(
     const content = extractMailContent(raw);
     const hit = detectForwardingVerification({
       providerHint: "proton",
+      authenticationResults: "dkim=pass header.d=proton.me",
       subject: content.subject,
       text: content.text,
       links: content.htmlLinks,
@@ -284,6 +269,7 @@ Deno.test(
     const content = extractMailContent(raw);
     const hit = detectForwardingVerification({
       providerHint: "proton",
+      authenticationResults: "dkim=pass header.d=proton.me",
       subject: content.subject,
       text: content.text,
       links: content.htmlLinks,
@@ -299,6 +285,7 @@ Deno.test("lookalike, javascript and data URLs never become actions", () => {
   ]) {
     const hit = detectForwardingVerification({
       providerHint: "gmail",
+      authenticationResults: "dkim=pass header.d=google.com",
       subject: "Gmail forwarding confirmation",
       text: "Confirm forwarding",
       links: [
@@ -307,4 +294,18 @@ Deno.test("lookalike, javascript and data URLs never become actions", () => {
     });
     assertEquals(hit?.url, null);
   }
+});
+
+Deno.test("provider words and spoofable hints do not authenticate an approval action", () => {
+  for (const input of [
+    { providerHint: "gmail" as const, subject: "Gmail forwarding confirmation", text: "Confirm forwarding https://mail-settings.google.com/mail/vf-test" },
+    { from: "x-google-smtp-source@example.test", subject: "Gmail forwarding confirmation", text: "Confirm forwarding https://mail-settings.google.com/mail/vf-test" },
+    { subject: "Notice", text: "Proton says confirm forwarding https://account.proton.me/forward" },
+  ]) assertEquals(detectForwardingVerification(input), null);
+});
+Deno.test("Gmail source mailbox is extracted only from a confirmation context", async () => {
+  const { extractGmailForwardingMailbox } = await import("./email-relay.ts");
+  assertEquals(extractGmailForwardingMailbox("Gmail will receive mail from owner@example.com", "ingest.example.com"), "owner@example.com");
+  assertEquals(extractGmailForwardingMailbox("contact owner@example.com", "ingest.example.com"), null);
+  assertEquals(extractGmailForwardingMailbox("receive mail from cf+abcdefghijklmnopqrstuvwxabcdefghijklmnop@ingest.example.com", "ingest.example.com"), null);
 });

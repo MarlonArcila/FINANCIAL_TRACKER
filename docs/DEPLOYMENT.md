@@ -479,3 +479,8 @@ Required inputs by gate:
 ## Financial Sources forwarding-verification release
 
 The `forwarding_verification_inbox` migration is additive and must be applied before the changed Email Relay Edge Functions. Deploy only `email-relay-ingest` and `email-relay-settings` when this feature changes, then promote the exact merged web SHA. The private verification inbox is service-only: browser access remains through authenticated ownership checks in `email-relay-settings`. Do not log or export its temporary links, codes, or excerpts.
+
+
+## Email Relay (active Financial Sources path)
+
+Email Relay is the only active Financial Sources mail path. Gmail OAuth and Microsoft Graph material in this document is legacy/rollback-only and must not be provisioned for new relay onboarding. Configure relay transport secrets only server-side and deploy changed functions in compatibility order after the additive migration. A user selects a provider, creates a private one-time alias, verifies any safe provider action, then proves a selective forwarding rule with the link test. Do not recommend global forwarding or historical mailbox import.

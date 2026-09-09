@@ -310,26 +310,22 @@ export type ForwardingVerificationInput = {
   authenticationResults?: string | null;
   receivedSpf?: string | null;
 };
-function providerOf(i: ForwardingVerificationInput): SourceProvider {
-  if (i.providerHint && i.providerHint !== "other") return i.providerHint;
-  const e = (
-    String(i.from ?? "") +
-    " " +
-    String(i.envelopeSender ?? "") +
-    " " +
-    String(i.authenticationResults ?? "") +
-    " " +
-    String(i.subject ?? "") +
-    " " +
-    i.text
-  ).toLowerCase();
-  return /google|gmail/.test(e)
-    ? "gmail"
-    : /proton/.test(e)
-      ? "proton"
-      : /outlook|microsoft|office365/.test(e)
-        ? "outlook"
-        : "other";
+export type ProviderEvidence = "strong" | "moderate" | "weak" | "unknown";
+export function providerEvidence(input: ForwardingVerificationInput): {
+  provider: SourceProvider;
+  level: ProviderEvidence;
+  reason: string;
+} {
+  const headers = [input.envelopeSender, input.from, input.authenticationResults, input.receivedSpf]
+    .filter((value): value is string => typeof value === "string")
+    .join(" ").toLowerCase();
+  const strongGoogle = /(?:smtp.gmail.com|google.com).{0,160}(?:dkim=pass|spf=pass)|(?:dkim=pass|spf=pass).{0,160}(?:smtp.gmail.com|google.com)/u.test(headers);
+  const strongProton = /(?:proton.me|protonmail.com).{0,160}(?:dkim=pass|spf=pass)|(?:dkim=pass|spf=pass).{0,160}(?:proton.me|protonmail.com)/u.test(headers);
+  if (strongGoogle) return { provider: "gmail", level: "strong", reason: "authenticated_google_chain" };
+  if (strongProton) return { provider: "proton", level: "strong", reason: "authenticated_proton_chain" };
+  // Worker hints are useful for routing diagnostics only; they cannot authorize an action.
+  if (input.providerHint && input.providerHint !== "other") return { provider: input.providerHint, level: "weak", reason: "transport_hint_only" };
+  return { provider: "other", level: "unknown", reason: "no_authenticated_provider_evidence" };
 }
 function allowed(provider: SourceProvider, host: string): boolean {
   const h = host.toLowerCase();
@@ -344,17 +340,16 @@ function allowed(provider: SourceProvider, host: string): boolean {
         h.endsWith(".protonmail.ch")
       : false;
 }
-function safeUrl(provider: SourceProvider, raw: string): string | null {
+export function safeProviderVerificationUrl(provider: SourceProvider, raw: unknown): string | null {
+  if (typeof raw !== "string" || raw.length > 2048) return null;
   try {
     const u = new URL(raw);
-    return u.protocol === "https:" &&
-      allowed(provider, u.hostname) &&
-      u.toString().length <= 2048
-      ? u.toString()
-      : null;
-  } catch {
-    return null;
-  }
+    const path = u.pathname.toLowerCase();
+    if (u.protocol !== "https:" || !allowed(provider, u.hostname)) return null;
+    if (!/(confirm|verify|forward|mail\/vf-|mail\/u\/|mail\/ca\/)/u.test(path)) return null;
+    if (/(decline|reject|cancel|unsubscribe|privacy|help|preferences)/u.test(path)) return null;
+    return u.toString();
+  } catch { return null; }
 }
 function positive(v: string): boolean {
   return (
@@ -385,9 +380,10 @@ export function detectForwardingVerification(
     typeof input === "object" && input !== null
       ? input
       : { subject: input, text: legacyText ?? "" };
-  const provider = providerOf(i),
-    combined = String(i.subject ?? "") + "\n" + i.text;
-  if (!semantics(provider, combined)) return null;
+  const evidence = providerEvidence(i);
+  const provider = evidence.provider;
+  const combined = String(i.subject ?? "") + "\n" + i.text;
+  if (evidence.level !== "strong" || !semantics(provider, combined)) return null;
   const candidates = [
     ...(i.links ?? []),
     ...(combined.match(/https:\/\/[^\s<>"']+/giu) ?? []).map((href) => ({
@@ -398,7 +394,7 @@ export function detectForwardingVerification(
   ];
   let url: string | null = null;
   for (const link of candidates) {
-    const u = safeUrl(provider, link.href.replace(/[),.;]+$/u, ""));
+    const u = safeProviderVerificationUrl(provider, link.href.replace(/[),.;]+$/u, ""));
     if (
       u &&
       positive(
@@ -434,6 +430,19 @@ export function detectForwardingVerification(
     confidence: url || code?.length ? 0.95 : 0.75,
   };
 }
+export function normalizeVerificationAction(
+  provider: SourceProvider,
+  rawUrl: unknown,
+  rawCode: unknown,
+): { kind: "safe_url" | "code" | "safe_url_and_code" | "instructions_only"; label: string; url?: string; code?: string } {
+  const url = safeProviderVerificationUrl(provider, rawUrl);
+  const code = typeof rawCode === "string" && /^[A-Za-z0-9-]{6,32}$/u.test(rawCode) ? rawCode : undefined;
+  if (url && code) return { kind: "safe_url_and_code", label: "Aprobar vinculación", url, code };
+  if (url) return { kind: "safe_url", label: "Aprobar vinculación", url };
+  if (code) return { kind: "code", label: "Copiar código", code };
+  return { kind: "instructions_only", label: "Ver cómo completarlo" };
+}
+
 export function detectGmailForwardingConfirmation(
   subject: string | null,
   text: string,
@@ -473,7 +482,16 @@ export function decodeBase64Bytes(value: string): Uint8Array {
 }
 
 export function extractGmailForwardingMailbox(text: string, aliasDomain: string): string | null {
-  const context=/(?:correo(?:s)?(?:s+de)?s+las+cuenta|mail(?:s+from)?s+thes+account|forward(?:ing)?s+(?:mail|messages)s+from)[^@]{0,120}([A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,})/iu.exec(text);
-  const candidate=context?.[1]?.toLowerCase() ?? null;
-  return candidate && !candidate.endsWith('@'+aliasDomain) && !/google|gmail.com$/iu.test(candidate.split('@')[0]??'') ? candidate.slice(0,320) : null;
+  const contexts = [
+    /(?:receive|receiving|forward)\s+(?:mail|messages)\s+from\s*[<\[]?([A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,})/iu,
+    /(?:recibir|reenv[ií]o)\s+(?:correos?|mensajes?)\s+(?:de|desde)\s*[<\[]?([A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,})/iu,
+  ];
+  for (const expression of contexts) {
+    const candidate = expression.exec(text)?.[1]?.toLowerCase();
+    if (!candidate || candidate.length > 320 || candidate.endsWith("@" + aliasDomain.toLowerCase())) continue;
+    const [local, host] = candidate.split("@");
+    if (!local || !host || /^(no-?reply|mailer-daemon|postmaster)$/iu.test(local)) continue;
+    return candidate;
+  }
+  return null;
 }
