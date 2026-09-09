@@ -59,7 +59,8 @@ function relayAliasRow(value: unknown): RelayAliasRow {
   };
 }
 function relaySourceMatchRow(value: unknown): RelaySourceMatchRow {
-  const row = record(value);
+  const normalized = Array.isArray(value) ? value[0] : value;
+  const row = record(normalized);
   const sourceId = typeof row.source_id === "string" ? row.source_id : null;
   const matchStatus = typeof row.match_status === "string"
     ? row.match_status
@@ -333,7 +334,7 @@ Deno.serve(async (request) => {
       throw sourceError;
     }
 
-    if (sourceMatch?.match_status === "revoked") {
+    if (sourceMatch?.match_status === "revoked" && !verification) {
       await service
         .from("source_events")
         .update({
@@ -357,6 +358,7 @@ Deno.serve(async (request) => {
       if (detectedMatchError) throw detectedMatchError;
       const detectedMatch = relaySourceMatchRow(detectedMatchData);
       sourceId = detectedMatch.source_id;
+      let verificationMatchStatus = detectedMatch.match_status;
       if (!sourceId) {
         const sourceEmail = verification.provider === "gmail"
           ? extractGmailForwardingMailbox(text, domain)
@@ -369,21 +371,30 @@ Deno.serve(async (request) => {
             p_source_email: sourceEmail,
           });
         if (createdSourceError) throw createdSourceError;
-        sourceId = typeof createdSource === "string"
-          ? createdSource
-          : (record(createdSource).source_id as string | undefined) ?? null;
+        const createdMatch = relaySourceMatchRow(createdSource);
+        sourceId = createdMatch.source_id;
+        verificationMatchStatus = createdMatch.match_status;
       }
-      if (detectedMatch.match_status === "revoked") {
+      if (!sourceId) {
+        const blockedByRevocation = detectedMatch.match_status === "revoked" ||
+          verificationMatchStatus === "setup_intent_required" ||
+          verificationMatchStatus === "alias_revoked_or_not_owned";
         await service
           .from("source_events")
           .update({
             processing_status: "ignored",
-            processing_error: "relay_source_revoked",
-            recipient_source_id: sourceId,
+            processing_error: blockedByRevocation
+              ? "relay_source_revoked_or_setup_required"
+              : "relay_source_unavailable",
+            recipient_source_id: null,
           })
           .eq("id", source.id);
         return json(
-          { accepted: true, financial: false, source: "revoked" },
+          {
+            accepted: true,
+            financial: false,
+            source: blockedByRevocation ? "revoked_or_setup_required" : "unavailable",
+          },
           202,
         );
       }
@@ -398,7 +409,7 @@ Deno.serve(async (request) => {
             relay_version: "email-relay-v2-multi-source",
             event_type: "forwarding_verification",
             provider: verification.provider,
-            source_match_status: detectedMatch.match_status,
+            source_match_status: verificationMatchStatus,
           },
         })
         .eq("id", source.id);
