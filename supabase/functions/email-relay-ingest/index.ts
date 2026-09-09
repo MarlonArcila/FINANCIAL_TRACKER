@@ -1,3 +1,4 @@
+import { originalSenderAuth } from "../_shared/email-auth.ts";
 import { sha256Base64Url } from "../_shared/crypto.ts";
 import { optionalEnv, requiredEnv } from "../_shared/env.ts";
 import { parseMailMessage } from "../_shared/financial-parser.ts";
@@ -137,16 +138,6 @@ Deno.serve(async (request) => {
     if (!aliasData) throw new HttpError(404, "relay_alias_not_found");
     const alias = relayAliasRow(aliasData);
     const sourceProvider = providerHint(body.forwardingProviderHint);
-    const { data: sourceMatchData, error: sourceMatchError } = await service
-      .rpc("service_match_email_relay_source", {
-        p_alias_id: alias.alias_id,
-        p_provider: sourceProvider,
-        p_source_email: null,
-      })
-      .single();
-    if (sourceMatchError) throw sourceMatchError;
-    const sourceMatch = relaySourceMatchRow(sourceMatchData);
-    let sourceId: string | null = sourceMatch.source_id;
     const { data: allowed, error: rateError } = await service.rpc(
       "service_take_email_relay_rate_limit",
       { p_alias_id: alias.alias_id, p_limit: 30, p_window_seconds: 600 },
@@ -273,6 +264,23 @@ Deno.serve(async (request) => {
       ),
       receivedSpf: sanitizeRelayHeader(auth.receivedSpf, 2000),
     });
+    // Match a trusted source only after provider authentication; hints cannot
+    // attach financial events/candidates to another configured source.
+    let sourceMatch: RelaySourceMatchRow = {
+      source_id: null,
+      match_status: "provider_authentication_unavailable",
+    };
+    if (evidence.level === "strong") {
+      const { data: sourceMatchData, error: sourceMatchError } = await service
+        .rpc("service_match_email_relay_source", {
+          p_alias_id: alias.alias_id,
+          p_provider: evidence.provider,
+          p_source_email: null,
+        }).single();
+      if (sourceMatchError) throw sourceMatchError;
+      sourceMatch = relaySourceMatchRow(sourceMatchData);
+    }
+    let sourceId: string | null = sourceMatch.source_id;
     const metadata = verification
       ? {
         relay_version: "email-relay-v2-multi-source",
@@ -286,7 +294,9 @@ Deno.serve(async (request) => {
         source_match_status: sourceMatch.match_status,
         provider_evidence: evidence.level,
         provider_evidence_reason: evidence.reason,
-        original_sender_auth: evidence.level,
+        forwarding_provider_evidence: evidence,
+        original_sender_auth: originalSenderAuth().level,
+        original_sender_authentication: originalSenderAuth(),
       };
     const sourcePayload = {
       user_id: alias.user_id,

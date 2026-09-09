@@ -2,12 +2,33 @@ import { assertEquals, assertRejects } from "jsr:@std/assert@1";
 import {
   detectForwardingVerification,
   extractAliasToken,
+  extractAuthenticatedForwardingAction,
   extractMailContent,
   extractTextFromMime,
+  type ForwardingVerificationInput,
   isDifferentRelaySource,
+  providerEvidence,
   verifyRelaySignature,
 } from "./email-relay.ts";
 import { parseMailMessage } from "./financial-parser.ts";
+import {
+  authDomainMatches,
+  authIdentityDomain,
+  normalizeAuthDomain,
+  originalSenderAuth,
+  parseAuthenticationResults,
+} from "./email-auth.ts";
+
+// Existing action/content fixtures are synthetic, not live trusted transport proof.
+// Preserve their extraction assertions AND verify runtime refuses their raw headers.
+function extractFixtureAction(input: ForwardingVerificationInput) {
+  assertEquals(detectForwardingVerification(input), null);
+  if (!input.authenticationResults) return null;
+  return extractAuthenticatedForwardingAction(
+    input,
+    input.providerHint ?? "other",
+  );
+}
 
 Deno.test("email relay extracts high entropy plus alias", () => {
   assertEquals(
@@ -40,7 +61,7 @@ Deno.test("MIME extraction ignores html execution and yields text", () => {
   assertEquals(extractTextFromMime(raw).includes("alert(1)"), false);
 });
 Deno.test("Gmail confirmation requires authenticated Google transport and accepts a narrow HTTPS action", () => {
-  const hit = detectForwardingVerification({
+  const hit = extractFixtureAction({
     providerHint: "gmail",
     authenticationResults: "dkim=pass header.d=google.com",
     subject: "Gmail Forwarding Confirmation",
@@ -181,14 +202,14 @@ Deno.test("relay semantic dedup never crosses alias boundaries", () => {
 Deno.test(
   "generic forwarding detector accepts English and Spanish Gmail confirmations",
   () => {
-    const english = detectForwardingVerification({
+    const english = extractFixtureAction({
       providerHint: "gmail",
       authenticationResults: "dkim=pass header.d=google.com",
       subject: "Gmail forwarding confirmation",
       text:
         "Confirm forwarding: https://mail-settings.google.com/mail/vf-test code 12345678",
     });
-    const spanish = detectForwardingVerification({
+    const spanish = extractFixtureAction({
       providerHint: "gmail",
       authenticationResults: "spf=pass smtp.mailfrom=google.com",
       subject: "Confirmación de reenvío de Gmail",
@@ -207,7 +228,7 @@ Deno.test(
   "forwarding detector rejects unsafe URLs and accepts a bounded code-only confirmation",
   () => {
     assertEquals(
-      detectForwardingVerification({
+      extractFixtureAction({
         providerHint: "gmail",
         authenticationResults: "dkim=pass header.d=google.com",
         subject: "Gmail forwarding confirmation",
@@ -216,7 +237,7 @@ Deno.test(
       "instructions_only",
     );
     assertEquals(
-      detectForwardingVerification({
+      extractFixtureAction({
         providerHint: "gmail",
         authenticationResults: "dkim=pass header.d=google.com",
         subject: "Gmail forwarding confirmation",
@@ -225,7 +246,7 @@ Deno.test(
       null,
     );
     assertEquals(
-      detectForwardingVerification({
+      extractFixtureAction({
         providerHint: "gmail",
         authenticationResults: "dkim=pass header.d=google.com",
         subject: "Gmail forwarding confirmation",
@@ -233,7 +254,7 @@ Deno.test(
       })?.url,
       null,
     );
-    const codeOnly = detectForwardingVerification({
+    const codeOnly = extractFixtureAction({
       providerHint: "gmail",
       authenticationResults: "dkim=pass header.d=google.com",
       subject: "Confirmación de reenvío Gmail",
@@ -262,7 +283,7 @@ Deno.test(
     const raw =
       'Subject: Gmail forwarding confirmation\r\nContent-Type: text/html; charset=UTF-8\r\n\r\n<p>Confirm forwarding</p><a href="https://mail-settings.google.com/mail/confirm?x=1&amp;y=2">Confirm forwarding</a>';
     const content = extractMailContent(raw);
-    const hit = detectForwardingVerification({
+    const hit = extractFixtureAction({
       providerHint: "gmail",
       authenticationResults: "dkim=pass header.d=google.com",
       subject: content.subject,
@@ -279,7 +300,7 @@ Deno.test(
     const raw =
       'Subject: Proton forwarding invitation\r\nContent-Type: multipart/mixed; boundary=outer\r\n\r\n--outer\r\nContent-Type: multipart/alternative; boundary=inner\r\n\r\n--inner\r\nContent-Type: text/html\r\nContent-Transfer-Encoding: quoted-printable\r\n\r\n<p>Accept forwarding</p><a href=3D"https://account.proton.me/forward?ok=3D1">Accept forwarding</a>\r\n--inner--\r\n--outer\r\nContent-Type: text/plain; name=bad.txt\r\nContent-Disposition: attachment\r\n\r\nhttps://evil.example/confirm\r\n--outer--';
     const content = extractMailContent(raw);
-    const hit = detectForwardingVerification({
+    const hit = extractFixtureAction({
       providerHint: "proton",
       authenticationResults: "dkim=pass header.d=proton.me",
       subject: content.subject,
@@ -299,7 +320,7 @@ Deno.test(
       "Subject: Proton forwarding invitation\r\nContent-Type: text/html\r\nContent-Transfer-Encoding: base64\r\n\r\n" +
       btoa(html);
     const content = extractMailContent(raw);
-    const hit = detectForwardingVerification({
+    const hit = extractFixtureAction({
       providerHint: "proton",
       authenticationResults: "dkim=pass header.d=proton.me",
       subject: content.subject,
@@ -317,7 +338,7 @@ Deno.test("lookalike, javascript and data URLs never become actions", () => {
       "data:text/plain,test",
     ]
   ) {
-    const hit = detectForwardingVerification({
+    const hit = extractFixtureAction({
       providerHint: "gmail",
       authenticationResults: "dkim=pass header.d=google.com",
       subject: "Gmail forwarding confirmation",
@@ -417,4 +438,117 @@ Deno.test("relay HMAC accepts a configured previous key during bounded overlap",
       nowMs: now,
     })
   );
+});
+
+Deno.test("permanent reproduced provider-auth cross-field exploit and adversarial variants", () => {
+  const attacks = [
+    "mx.cloudflare.net; spf=pass smtp.mailfrom=attacker.example",
+    "mx.cloudflare.net; dkim=pass header.d=attacker.example",
+    "mx.cloudflare.net; dkim=pass header.d=google.com.attacker.example",
+    "mx.cloudflare.net; dkim=pass header.d=evilgoogle.com",
+    "mx.cloudflare.net; spf=pass smtp.mailfrom=attacker.example; dkim=pass header.d=attacker.example",
+    "attacker.example; dkim=pass header.d=google.com",
+    "mx.cloudflare.net; dkim=fail header.d=google.com; spf=pass smtp.mailfrom=attacker.example",
+    "mx.cloudflare.net; dkim=pass header.d=google.com; spf=fail smtp.mailfrom=attacker.example",
+    "dkim=pass header.d=google.com",
+    "",
+  ];
+  for (const authenticationResults of attacks) {
+    const input = {
+      providerHint: "gmail" as const,
+      from: '"google.com support" <attacker@attacker.example>',
+      envelopeSender: "attacker@attacker.example",
+      authenticationResults,
+      receivedSpf: "pass google.com",
+      arcAuthenticationResults:
+        "i=1; mx.google.com; dkim=pass header.d=google.com",
+      subject: "Gmail forwarding confirmation",
+      text:
+        "Confirm https://mail-settings.google.com/mail/vf-test code 123456789 CapitalFlow prueba CF-TEST123456",
+    };
+    assertEquals(providerEvidence(input).level === "strong", false);
+    assertEquals(detectForwardingVerification(input), null);
+    // Same providerEvidence gate is used before completing a link challenge.
+    assertEquals(
+      providerEvidence(input).level === "strong" &&
+        /CF-TEST123456/u.test(input.text),
+      false,
+    );
+    assertEquals(originalSenderAuth().level, "unknown");
+  }
+});
+
+Deno.test("authentication parser binds each PASS to its own identity", () => {
+  const verdicts = parseAuthenticationResults(
+    "mx.cloudflare.net; dkim=fail header.d=google.com; spf=pass smtp.mailfrom=attacker.example; dkim=pass header.d=attacker.example; spf=fail smtp.mailfrom=google.com; dmarc=pass header.from=attacker.example",
+  );
+  assertEquals(
+    verdicts.map((v) => [v.method, v.result, v.authenticatedDomain]),
+    [
+      ["dkim", "fail", "google.com"],
+      ["spf", "pass", "attacker.example"],
+      ["dkim", "pass", "attacker.example"],
+      ["spf", "fail", "google.com"],
+      ["dmarc", "pass", "attacker.example"],
+    ],
+  );
+  assertEquals(
+    verdicts.some((v) =>
+      v.result === "pass" && v.authenticatedDomain === "google.com"
+    ),
+    false,
+  );
+});
+
+Deno.test("structured positive synthetic identities do not establish runtime provenance", () => {
+  for (const domain of ["google.com", "proton.me"]) {
+    const raw =
+      `mx.cloudflare.net; DKIM=PASS (comment) header.d=${domain.toUpperCase()}.;\r\n DMARC=PASS header.from=${domain}; SPF=PASS smtp.mailfrom=<sender@${domain}>`;
+    const verdicts = parseAuthenticationResults(raw);
+    assertEquals(verdicts.length, 3);
+    assertEquals(
+      verdicts.every((v) =>
+        v.result === "pass" && v.authenticatedDomain === domain
+      ),
+      true,
+    );
+    assertEquals(
+      providerEvidence({ subject: null, text: "", authenticationResults: raw })
+        .level,
+      "unknown",
+    );
+  }
+});
+
+Deno.test("domain identities fail closed for confusion and malformed syntax", () => {
+  assertEquals(normalizeAuthDomain("GOOGLE.COM."), "google.com");
+  for (
+    const domain of [
+      "google.com.attacker.example",
+      "evilgoogle.com",
+      "gооgle.com",
+      "",
+      "google..com",
+      "google.com/path",
+      "google.com@attacker.example",
+    ]
+  ) assertEquals(authDomainMatches(domain, "google.com"), false);
+  assertEquals(authIdentityDomain("<sender@GOOGLE.COM.>"), "google.com");
+  for (
+    const identity of [
+      "a@@google.com",
+      "a..b@google.com",
+      "Display <a@google.com>",
+      "@google.com",
+    ]
+  ) assertEquals(authIdentityDomain(identity), null);
+  for (
+    const raw of [
+      "mx.cloudflare.net; dkim=pass header.d=google.com header.d=attacker.example",
+      "mx.cloudflare.net; dkim=pass (unclosed header.d=google.com",
+      'mx.cloudflare.net; dkim=pass header.d="google.com',
+      "mx.cloudflare.net; dkim=pass header.d=google.com\nspf=pass",
+      "x".repeat(4001),
+    ]
+  ) assertEquals(parseAuthenticationResults(raw), []);
 });
