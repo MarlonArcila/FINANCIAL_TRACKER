@@ -143,9 +143,9 @@ must(
   "financial-sources terminology is visible without changing the internal route",
 );
 must(
-  relayCard.includes("Configuración del reenvío") &&
-    relayCard.includes("Filtros sugeridos para Gmail") &&
-    relayCard.includes("Verificaciones de reenvío"),
+  relayCard.includes("Vincular correo") &&
+    relayCard.includes("Filtros y reglas financieras") &&
+    relayCard.includes("Confirmación recibida"),
   "financial-sources guide and verification inbox are present",
 );
 must(
