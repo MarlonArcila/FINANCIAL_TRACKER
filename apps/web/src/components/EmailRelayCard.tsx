@@ -46,6 +46,8 @@ type RelayResponse = {
   sources?: RelaySource[];
   catalog?: CatalogItem[];
   verifications?: Verification[];
+  testSubject?: string;
+  testExpiresAt?: string;
 };
 const labels: Record<RelayState, string> = {
   NOT_CONFIGURED: "No configurado",
@@ -167,7 +169,7 @@ export function EmailRelayCard() {
         ...extra,
       });
       if (
-        (action === "generate" || action === "rotate") &&
+        (action === "generate" || action === "rotate" || action === "create_link_test") &&
         data.address !== undefined
       )
         setState((prev) => ({
@@ -331,6 +333,7 @@ export function EmailRelayCard() {
                       ))}
                     <small>Correo: {source.email ?? "pendiente de identificar"}</small>
                   </div>
+                  <button className="secondary-button" type="button" disabled={busy || source.state === "ACTIVE"} onClick={() => void act("create_link_test", { sourceId: source.id })}>Generar prueba de reenvío</button>
                   <button
                     className="ghost-danger"
                     type="button"
@@ -398,6 +401,7 @@ export function EmailRelayCard() {
             <h3>{state.sources?.some((source) => source.state === "ACTIVE") ? "Fuente activa" : selectedProvider ? "Configura el reenvío" : "Vincula tu correo"}</h3>
             <p>El progreso es evidencia del backend: elegir proveedor solo abre esta guía; no crea una fuente confiable ni puede marcarla activa.</p>
             <button ref={launcherRef} className="primary-button" type="button" disabled={busy} onClick={() => setProviderDialogOpen(true)}>Vincular correo</button>
+            {state.testSubject ? <div className="notice notice-info"><strong>Prueba de reenvío</strong><p>Desde otro buzón, envía este asunto a tu correo de {providerNames[selectedProvider ?? provider]}. La regla selectiva debe reenviarlo a CapitalFlow; enviarlo directo a la dirección privada no sirve.</p><code>{state.testSubject}</code><button type="button" className="secondary-button" onClick={() => void copy(state.testSubject!, "Asunto de prueba")}>Copiar asunto</button></div> : null}
             <details><summary>¿Necesitas ayuda?</summary><p>Configura una regla selectiva en tu proveedor. No envíes un correo directamente a la dirección privada: eso no prueba el reenvío del proveedor.</p></details>
           </section>
           {providerDialogOpen ? (

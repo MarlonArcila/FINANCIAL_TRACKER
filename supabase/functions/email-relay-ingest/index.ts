@@ -195,6 +195,24 @@ Deno.serve(async (request) => {
         2000,
       ),
     });
+    const linkChallenge = /\bCapitalFlow\s+prueba\s+(CF-[A-Z0-9_-]{8,64})\b/iu.exec((detectedSubject ?? "") + "\n" + text)?.[1] ?? null;
+    const linkEvidence = providerEvidence({
+      providerHint: sourceProvider,
+      subject: detectedSubject,
+      text,
+      envelopeSender,
+      from,
+      authenticationResults: sanitizeRelayHeader(record(body.authentication).authenticationResults, 4000),
+      receivedSpf: sanitizeRelayHeader(record(body.authentication).receivedSpf, 2000),
+    });
+    if (linkChallenge && linkEvidence.level === "strong" && linkEvidence.provider !== "other") {
+      const { data: completedTest, error: linkTestError } = await service.rpc(
+        "service_complete_email_relay_link_test",
+        { p_alias_id: alias.alias_id, p_provider: linkEvidence.provider, p_challenge_hash: await sha256Base64Url(linkChallenge) },
+      );
+      if (linkTestError) throw linkTestError;
+      if (completedTest) return json({ accepted: true, financial: false, linkTest: "received" }, 202);
+    }
     const auth = record(body.authentication);
     const evidence = providerEvidence({
       providerHint: sourceProvider,

@@ -239,4 +239,16 @@ must(
   "TEST_GUARDRAILS_NOT_WEAKENED: readable UI and browser authority regressions are guarded",
 );
 
+const v4Migration = fs.readdirSync("supabase/migrations").find((file) => file.endsWith("_email_relay_v4_security_linking.sql"));
+const v4Sql = v4Migration ? read("supabase/migrations/" + v4Migration) : "";
+must(
+  v4Sql.includes("private.email_relay_link_tests") &&
+    v4Sql.includes("service_complete_email_relay_link_test") &&
+    gateway.includes("linkChallenge") &&
+    gateway.includes("linkEvidence.level === \"strong\"") &&
+    ui.includes("Generar prueba de reenvío") &&
+    ui.includes("enviarlo directo a la dirección privada no sirve"),
+  "link test is short-lived, provider-evidence-gated, and direct-to-alias is not forwarding proof",
+);
+
 if (process.exitCode) process.exit(process.exitCode);

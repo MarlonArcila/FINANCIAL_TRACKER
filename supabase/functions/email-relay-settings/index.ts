@@ -112,6 +112,18 @@ Deno.serve((request) =>
         if (error) throw error;
         return json({ setupIntent: { id: (data as any).setup_intent_id, provider: (data as any).provider, expiresAt: (data as any).expires_at } });
       }
+      if (action === "create_link_test") {
+        if (!body.sourceId) throw new HttpError(422, "source_id_required");
+        await assertEntitled(service, user.id);
+        const challenge = "CF-" + token().slice(0, 10).toUpperCase();
+        const { data, error } = await service.rpc("service_create_email_relay_link_test", {
+          p_user_id: user.id,
+          p_source_id: body.sourceId,
+          p_challenge_hash: await sha256Base64Url(challenge),
+        }).single();
+        if (error) throw error;
+        return json({ testSubject: "CapitalFlow prueba " + challenge, testExpiresAt: (data as any).expires_at });
+      }
       if (action === "revoke_source") {
         if (!body.sourceId) throw new HttpError(422, "source_id_required");
         const { data, error } = await service.rpc(

@@ -157,5 +157,31 @@ begin
   delete from private.email_relay_deliveries where received_at < now()-interval '30 days';
 end $$;
 
-revoke all on function public.service_create_email_relay_setup_intent(uuid,text),public.service_match_email_relay_source(uuid,text,text),public.service_upsert_email_relay_source_from_inbound(uuid,uuid,text,text),public.service_create_email_relay_forwarding_verification(uuid,uuid,uuid,uuid,text,text,text,text,text,text,timestamptz),public.service_purge_email_relay_v4() from public,anon,authenticated;
-grant execute on function public.service_create_email_relay_setup_intent(uuid,text),public.service_match_email_relay_source(uuid,text,text),public.service_upsert_email_relay_source_from_inbound(uuid,uuid,text,text),public.service_create_email_relay_forwarding_verification(uuid,uuid,uuid,uuid,text,text,text,text,text,text,timestamptz),public.service_purge_email_relay_v4() to service_role;
+create or replace function public.service_create_email_relay_link_test(p_user_id uuid,p_source_id uuid,p_challenge_hash text)
+returns table(link_test_id uuid,expires_at timestamptz)
+language plpgsql security invoker set search_path='' as $$
+declare v_alias uuid; v_provider text; v_id uuid; v_expires timestamptz:=now()+interval '30 minutes';
+begin
+  if p_challenge_hash !~ '^[A-Za-z0-9_-]{43}$' then raise exception 'invalid_link_test_hash' using errcode='22023'; end if;
+  select alias_id,provider into v_alias,v_provider from private.email_relay_sources where id=p_source_id and user_id=p_user_id and revoked_at is null;
+  if v_alias is null then raise exception 'email_relay_source_not_found' using errcode='P0001'; end if;
+  update private.email_relay_link_tests set status='dismissed',updated_at=now() where source_id=p_source_id and status='pending';
+  insert into private.email_relay_link_tests(user_id,alias_id,source_id,provider,challenge_hash,expires_at) values(p_user_id,v_alias,p_source_id,v_provider,p_challenge_hash,v_expires) returning id into v_id;
+  return query select v_id,v_expires;
+end $$;
+
+create or replace function public.service_complete_email_relay_link_test(p_alias_id uuid,p_provider text,p_challenge_hash text)
+returns uuid language plpgsql security invoker set search_path='' as $$
+declare v_source uuid; v_test uuid;
+begin
+  update private.email_relay_link_tests set status='received',received_at=now(),updated_at=now() where alias_id=p_alias_id and provider=p_provider and challenge_hash=p_challenge_hash and status='pending' and expires_at>now() returning id,source_id into v_test,v_source;
+  if v_test is null or v_source is null then return null; end if;
+  update private.email_relay_sources set status='active',last_delivery_at=now(),last_link_test_at=now(),updated_at=now() where id=v_source and revoked_at is null;
+  update private.email_relay_aliases set status='active',last_received_at=now(),updated_at=now() where id=p_alias_id and revoked_at is null;
+  update public.source_connections set status='active',last_sync_at=now(),updated_at=now() where id=(select connection_id from private.email_relay_aliases where id=p_alias_id);
+  update private.email_relay_forwarding_verifications set status='resolved',resolved_at=now(),verification_url=null,verification_code=null,message_excerpt=null,updated_at=now() where source_id=v_source and status in ('pending','opened');
+  return v_test;
+end $$;
+
+revoke all on function public.service_create_email_relay_setup_intent(uuid,text),public.service_match_email_relay_source(uuid,text,text),public.service_upsert_email_relay_source_from_inbound(uuid,uuid,text,text),public.service_create_email_relay_forwarding_verification(uuid,uuid,uuid,uuid,text,text,text,text,text,text,timestamptz),public.service_purge_email_relay_v4(),public.service_create_email_relay_link_test(uuid,uuid,text),public.service_complete_email_relay_link_test(uuid,text,text) from public,anon,authenticated;
+grant execute on function public.service_create_email_relay_setup_intent(uuid,text),public.service_match_email_relay_source(uuid,text,text),public.service_upsert_email_relay_source_from_inbound(uuid,uuid,text,text),public.service_create_email_relay_forwarding_verification(uuid,uuid,uuid,uuid,text,text,text,text,text,text,timestamptz),public.service_purge_email_relay_v4(),public.service_create_email_relay_link_test(uuid,uuid,text),public.service_complete_email_relay_link_test(uuid,text,text) to service_role;
