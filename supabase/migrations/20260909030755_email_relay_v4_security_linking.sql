@@ -80,7 +80,7 @@ grant execute on function public.service_list_email_relay_sources(uuid) to servi
 
 create or replace function public.service_create_email_relay_setup_intent(p_user_id uuid,p_provider text)
 returns table(setup_intent_id uuid,provider text,expires_at timestamptz)
-language plpgsql security invoker set search_path='' as $$$
+language plpgsql security invoker set search_path='' as $$
 declare v_alias uuid; v_id uuid; v_expires timestamptz := now()+interval '24 hours';
 begin
   if p_provider not in ('gmail','outlook','proton','other') then raise exception 'invalid_email_relay_source_provider' using errcode='22023'; end if;
@@ -93,7 +93,7 @@ end $$;
 
 create or replace function public.service_match_email_relay_source(p_alias_id uuid,p_provider text,p_source_email text default null)
 returns table(source_id uuid,match_status text)
-language plpgsql stable security invoker set search_path='' as $$$
+language plpgsql stable security invoker set search_path='' as $$
 declare v_count integer; v_source uuid; v_email text:=nullif(lower(btrim(p_source_email)), '');
 begin
   if p_provider not in ('gmail','outlook','proton','other') then return query select null::uuid,'invalid_provider'::text; return; end if;
@@ -109,7 +109,7 @@ end $$;
 
 create or replace function public.service_upsert_email_relay_source_from_inbound(p_user_id uuid,p_alias_id uuid,p_provider text,p_source_email text)
 returns table(source_id uuid,match_status text)
-language plpgsql security invoker set search_path='' as $$$
+language plpgsql security invoker set search_path='' as $$
 declare v_email text:=nullif(lower(btrim(p_source_email)), ''); v_source uuid; v_count integer;
 begin
   if p_provider not in ('gmail','outlook','proton','other') then raise exception 'invalid_email_relay_source_provider' using errcode='22023'; end if;
@@ -132,7 +132,7 @@ begin
 end $$;
 
 create or replace function public.service_create_email_relay_forwarding_verification(p_user_id uuid,p_alias_id uuid,p_source_id uuid,p_source_event_id uuid,p_provider text,p_sender text,p_subject text,p_excerpt text,p_url text,p_code text,p_received_at timestamptz)
-returns uuid language plpgsql security invoker set search_path='' as $$$
+returns uuid language plpgsql security invoker set search_path='' as $$
 declare v_id uuid;
 begin
   if p_provider not in ('gmail','outlook','proton','other') then raise exception 'invalid_verification_provider' using errcode='22023'; end if;
@@ -148,7 +148,7 @@ begin
 end $$;
 
 create or replace function public.service_purge_email_relay_v4()
-returns void language plpgsql security invoker set search_path='' as $$$
+returns void language plpgsql security invoker set search_path='' as $$
 begin
   update private.email_relay_forwarding_verifications set status='expired',verification_url=null,verification_code=null,message_excerpt=null,updated_at=now() where status in ('pending','opened') and expires_at<=now();
   update private.email_relay_link_tests set status='expired',updated_at=now() where status='pending' and expires_at<=now();
@@ -159,7 +159,7 @@ end $$;
 
 create or replace function public.service_create_email_relay_link_test(p_user_id uuid,p_source_id uuid,p_challenge_hash text)
 returns table(link_test_id uuid,expires_at timestamptz)
-language plpgsql security invoker set search_path='' as $$$
+language plpgsql security invoker set search_path='' as $$
 declare v_alias uuid; v_provider text; v_id uuid; v_expires timestamptz:=now()+interval '30 minutes';
 begin
   if p_challenge_hash !~ '^[A-Za-z0-9_-]{43}$' then raise exception 'invalid_link_test_hash' using errcode='22023'; end if;
@@ -171,7 +171,7 @@ begin
 end $$;
 
 create or replace function public.service_complete_email_relay_link_test(p_alias_id uuid,p_provider text,p_challenge_hash text)
-returns uuid language plpgsql security invoker set search_path='' as $$$
+returns uuid language plpgsql security invoker set search_path='' as $$
 declare v_source uuid; v_test uuid;
 begin
   update private.email_relay_link_tests set status='received',received_at=now(),updated_at=now() where alias_id=p_alias_id and provider=p_provider and challenge_hash=p_challenge_hash and status='pending' and expires_at>now() returning id,source_id into v_test,v_source;
