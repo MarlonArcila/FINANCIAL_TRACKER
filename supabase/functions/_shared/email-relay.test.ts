@@ -1,8 +1,8 @@
 import { assertEquals, assertRejects } from "jsr:@std/assert@1";
 import {
   detectForwardingVerification,
-  extractMailContent,
   extractAliasToken,
+  extractMailContent,
   extractTextFromMime,
   isDifferentRelaySource,
   verifyRelaySignature,
@@ -64,7 +64,7 @@ Deno.test("invalid HMAC is rejected", async () => {
       signature: "0".repeat(64),
       body: "{}",
       nowMs: now,
-    }),
+    })
   );
 });
 Deno.test(
@@ -78,7 +78,7 @@ Deno.test(
         signature: "0".repeat(64),
         body: "{}",
         nowMs: 1700001000000,
-      }),
+      })
     );
   },
 );
@@ -181,8 +181,20 @@ Deno.test("relay semantic dedup never crosses alias boundaries", () => {
 Deno.test(
   "generic forwarding detector accepts English and Spanish Gmail confirmations",
   () => {
-    const english = detectForwardingVerification({ providerHint: "gmail", authenticationResults: "dkim=pass header.d=google.com", subject: "Gmail forwarding confirmation", text: "Confirm forwarding: https://mail-settings.google.com/mail/vf-test code 12345678" });
-    const spanish = detectForwardingVerification({ providerHint: "gmail", authenticationResults: "spf=pass smtp.mailfrom=google.com", subject: "Confirmación de reenvío de Gmail", text: "Completa la confirmación en https://accounts.google.com/forwarding/test Código 87654321" });
+    const english = detectForwardingVerification({
+      providerHint: "gmail",
+      authenticationResults: "dkim=pass header.d=google.com",
+      subject: "Gmail forwarding confirmation",
+      text:
+        "Confirm forwarding: https://mail-settings.google.com/mail/vf-test code 12345678",
+    });
+    const spanish = detectForwardingVerification({
+      providerHint: "gmail",
+      authenticationResults: "spf=pass smtp.mailfrom=google.com",
+      subject: "Confirmación de reenvío de Gmail",
+      text:
+        "Completa la confirmación en https://accounts.google.com/forwarding/test Código 87654321",
+    });
     assertEquals(english?.provider, "gmail");
     assertEquals(
       english?.url?.startsWith("https://mail-settings.google.com/"),
@@ -195,18 +207,38 @@ Deno.test(
   "forwarding detector rejects unsafe URLs and accepts a bounded code-only confirmation",
   () => {
     assertEquals(
-      detectForwardingVerification({ providerHint: "gmail", authenticationResults: "dkim=pass header.d=google.com", subject: "Gmail forwarding confirmation", text: "Confirm at http://evil.example/verify", })?.action.kind,
+      detectForwardingVerification({
+        providerHint: "gmail",
+        authenticationResults: "dkim=pass header.d=google.com",
+        subject: "Gmail forwarding confirmation",
+        text: "Confirm at http://evil.example/verify",
+      })?.action.kind,
       "instructions_only",
     );
     assertEquals(
-      detectForwardingVerification({ providerHint: "gmail", authenticationResults: "dkim=pass header.d=google.com", subject: "Gmail forwarding confirmation", text: "Confirm at javascript:alert(1)", })?.url,
+      detectForwardingVerification({
+        providerHint: "gmail",
+        authenticationResults: "dkim=pass header.d=google.com",
+        subject: "Gmail forwarding confirmation",
+        text: "Confirm at javascript:alert(1)",
+      })?.url,
       null,
     );
     assertEquals(
-      detectForwardingVerification({ providerHint: "gmail", authenticationResults: "dkim=pass header.d=google.com", subject: "Gmail forwarding confirmation", text: "Confirm at data:text/plain,no", })?.url,
+      detectForwardingVerification({
+        providerHint: "gmail",
+        authenticationResults: "dkim=pass header.d=google.com",
+        subject: "Gmail forwarding confirmation",
+        text: "Confirm at data:text/plain,no",
+      })?.url,
       null,
     );
-    const codeOnly = detectForwardingVerification({ providerHint: "gmail", authenticationResults: "dkim=pass header.d=google.com", subject: "Confirmación de reenvío Gmail", text: "Código de verificación: ABCD-1234", });
+    const codeOnly = detectForwardingVerification({
+      providerHint: "gmail",
+      authenticationResults: "dkim=pass header.d=google.com",
+      subject: "Confirmación de reenvío Gmail",
+      text: "Código de verificación: ABCD-1234",
+    });
     assertEquals(codeOnly?.url, null);
     assertEquals(codeOnly?.code, "ABCD-1234");
   },
@@ -278,11 +310,13 @@ Deno.test(
   },
 );
 Deno.test("lookalike, javascript and data URLs never become actions", () => {
-  for (const url of [
-    "https://google.com.evil.example/confirm",
-    "javascript:alert(1)",
-    "data:text/plain,test",
-  ]) {
+  for (
+    const url of [
+      "https://google.com.evil.example/confirm",
+      "javascript:alert(1)",
+      "data:text/plain,test",
+    ]
+  ) {
     const hit = detectForwardingVerification({
       providerHint: "gmail",
       authenticationResults: "dkim=pass header.d=google.com",
@@ -297,15 +331,90 @@ Deno.test("lookalike, javascript and data URLs never become actions", () => {
 });
 
 Deno.test("provider words and spoofable hints do not authenticate an approval action", () => {
-  for (const input of [
-    { providerHint: "gmail" as const, subject: "Gmail forwarding confirmation", text: "Confirm forwarding https://mail-settings.google.com/mail/vf-test" },
-    { from: "x-google-smtp-source@example.test", subject: "Gmail forwarding confirmation", text: "Confirm forwarding https://mail-settings.google.com/mail/vf-test" },
-    { subject: "Notice", text: "Proton says confirm forwarding https://account.proton.me/forward" },
-  ]) assertEquals(detectForwardingVerification(input), null);
+  for (
+    const input of [
+      {
+        providerHint: "gmail" as const,
+        subject: "Gmail forwarding confirmation",
+        text:
+          "Confirm forwarding https://mail-settings.google.com/mail/vf-test",
+      },
+      {
+        from: "x-google-smtp-source@example.test",
+        subject: "Gmail forwarding confirmation",
+        text:
+          "Confirm forwarding https://mail-settings.google.com/mail/vf-test",
+      },
+      {
+        subject: "Notice",
+        text:
+          "Proton says confirm forwarding https://account.proton.me/forward",
+      },
+    ]
+  ) assertEquals(detectForwardingVerification(input), null);
 });
 Deno.test("Gmail source mailbox is extracted only from a confirmation context", async () => {
   const { extractGmailForwardingMailbox } = await import("./email-relay.ts");
-  assertEquals(extractGmailForwardingMailbox("Gmail will receive mail from owner@example.com", "ingest.example.com"), "owner@example.com");
-  assertEquals(extractGmailForwardingMailbox("contact owner@example.com", "ingest.example.com"), null);
-  assertEquals(extractGmailForwardingMailbox("receive mail from cf+abcdefghijklmnopqrstuvwxabcdefghijklmnop@ingest.example.com", "ingest.example.com"), null);
+  assertEquals(
+    extractGmailForwardingMailbox(
+      "Gmail will receive mail from owner@example.com",
+      "ingest.example.com",
+    ),
+    "owner@example.com",
+  );
+  assertEquals(
+    extractGmailForwardingMailbox(
+      "contact owner@example.com",
+      "ingest.example.com",
+    ),
+    null,
+  );
+  assertEquals(
+    extractGmailForwardingMailbox(
+      "receive mail from cf+abcdefghijklmnopqrstuvwxabcdefghijklmnop@ingest.example.com",
+      "ingest.example.com",
+    ),
+    null,
+  );
+});
+
+Deno.test("relay HMAC accepts a configured previous key during bounded overlap", async () => {
+  const now = 1_700_000_000_000;
+  const timestamp = String(Math.floor(now / 1000));
+  const nonce = "123e4567-e89b-12d3-a456-426614174000";
+  const body = "{}";
+  const key = await crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode("previous"),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"],
+  );
+  const bytes = new Uint8Array(
+    await crypto.subtle.sign(
+      "HMAC",
+      key,
+      new TextEncoder().encode(`${timestamp}.${nonce}.${body}`),
+    ),
+  );
+  const signature = [...bytes].map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("");
+  await verifyRelaySignature({
+    secrets: ["current", "previous"],
+    timestamp,
+    nonce,
+    signature,
+    body,
+    nowMs: now,
+  });
+  await assertRejects(() =>
+    verifyRelaySignature({
+      secrets: ["current"],
+      timestamp,
+      nonce,
+      signature,
+      body,
+      nowMs: now,
+    })
+  );
 });

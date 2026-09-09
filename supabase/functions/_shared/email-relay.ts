@@ -10,8 +10,9 @@ export const EMAIL_RELAY_SIGNATURE_TOLERANCE_SECONDS = 300;
 export const EMAIL_RELAY_MAX_RAW_BYTES = 524_288;
 
 export async function sha256Hex(value: string | Uint8Array): Promise<string> {
-  const bytes =
-    typeof value === "string" ? new TextEncoder().encode(value) : value;
+  const bytes = typeof value === "string"
+    ? new TextEncoder().encode(value)
+    : value;
   const digest = await crypto.subtle.digest(
     "SHA-256",
     toOwnedArrayBuffer(bytes),
@@ -40,8 +41,9 @@ async function hmacHex(secret: string, value: string): Promise<string> {
 }
 
 export function constantTimeEqualHex(left: string, right: string): boolean {
-  if (!/^[0-9a-f]{64}$/iu.test(left) || !/^[0-9a-f]{64}$/iu.test(right))
+  if (!/^[0-9a-f]{64}$/iu.test(left) || !/^[0-9a-f]{64}$/iu.test(right)) {
     return false;
+  }
   const a = left.toLowerCase();
   const b = right.toLowerCase();
   let diff = 0;
@@ -50,27 +52,42 @@ export function constantTimeEqualHex(left: string, right: string): boolean {
 }
 
 export async function verifyRelaySignature(input: {
-  secret: string;
+  secret?: string;
+  secrets?: readonly string[];
   timestamp: string;
   nonce: string;
   signature: string;
   body: string;
   nowMs?: number;
 }): Promise<void> {
-  if (!/^\d{10}$/u.test(input.timestamp))
+  if (!/^\d{10}$/u.test(input.timestamp)) {
     throw new HttpError(401, "invalid_relay_timestamp");
-  if (!/^[0-9a-f-]{36}$/iu.test(input.nonce))
+  }
+  if (!/^[0-9a-f-]{36}$/iu.test(input.nonce)) {
     throw new HttpError(401, "invalid_relay_nonce");
+  }
   const seconds = Number(input.timestamp);
   const now = Math.floor((input.nowMs ?? Date.now()) / 1000);
-  if (Math.abs(now - seconds) > EMAIL_RELAY_SIGNATURE_TOLERANCE_SECONDS)
+  if (Math.abs(now - seconds) > EMAIL_RELAY_SIGNATURE_TOLERANCE_SECONDS) {
     throw new HttpError(401, "relay_timestamp_out_of_window");
-  const expected = await hmacHex(
-    input.secret,
-    `${input.timestamp}.${input.nonce}.${input.body}`,
+  }
+  const secrets = [
+    ...new Set(
+      [input.secret, ...(input.secrets ?? [])].filter((
+        value,
+      ): value is string => Boolean(value)),
+    ),
+  ];
+  if (!secrets.length) {
+    throw new HttpError(500, "relay_signature_secret_missing");
+  }
+  const signed = `${input.timestamp}.${input.nonce}.${input.body}`;
+  const expected = await Promise.all(
+    secrets.map((secret) => hmacHex(secret, signed)),
   );
-  if (!constantTimeEqualHex(expected, input.signature))
+  if (!expected.some((value) => constantTimeEqualHex(value, input.signature))) {
     throw new HttpError(401, "invalid_relay_signature");
+  }
 }
 
 export function extractAliasToken(recipient: string, domain: string): string {
@@ -80,8 +97,9 @@ export function extractAliasToken(recipient: string, domain: string): string {
     !local ||
     !host ||
     host.toLowerCase() !== domain.toLowerCase()
-  )
+  ) {
     throw new HttpError(404, "relay_alias_not_found");
+  }
   const match = /^cf\+([A-Za-z0-9_-]{40,80})$/u.exec(local);
   if (!match) throw new HttpError(404, "relay_alias_not_found");
   return match[1];
@@ -134,8 +152,9 @@ function decodePart(
   charset: string | null,
 ): string {
   try {
-    if ((encoding ?? "").toLowerCase().includes("quoted-printable"))
+    if ((encoding ?? "").toLowerCase().includes("quoted-printable")) {
       return decodeQuotedPrintable(body);
+    }
     let bytes: Uint8Array;
     if ((encoding ?? "").toLowerCase().includes("base64")) {
       const v = atob(body.replace(/\s+/gu, ""));
@@ -146,8 +165,8 @@ function decodePart(
       c.includes("8859")
         ? "iso-8859-1"
         : c.includes("1252")
-          ? "windows-1252"
-          : "utf-8",
+        ? "windows-1252"
+        : "utf-8",
       { fatal: false },
     ).decode(bytes);
   } catch {
@@ -213,12 +232,11 @@ function subjectDecode(value: string | null): string | null {
     value
       .replace(/=\?([^?]+)\?([bq])\?([^?]*)\?=/giu, (_a, c, m, v) => {
         try {
-          const bytes =
-            m.toLowerCase() === "b"
-              ? Uint8Array.from(atob(v), (x) => x.charCodeAt(0))
-              : new TextEncoder().encode(
-                  decodeQuotedPrintable(v.replace(/_/gu, " ")),
-                );
+          const bytes = m.toLowerCase() === "b"
+            ? Uint8Array.from(atob(v), (x) => x.charCodeAt(0))
+            : new TextEncoder().encode(
+              decodeQuotedPrintable(v.replace(/_/gu, " ")),
+            );
           return new TextDecoder(
             String(c).toLowerCase().includes("8859") ? "iso-8859-1" : "utf-8",
             { fatal: false },
@@ -248,18 +266,21 @@ export function extractMailContent(raw: string): ExtractedMailContent {
     if (/attachment/iu.test(disp) || /\bname\s*=/iu.test(type)) return;
     const boundary = param(type, "boundary");
     if (/^multipart\//iu.test(type) && boundary) {
-      for (const child of body
-        .split("--" + boundary)
-        .slice(1)
-        .map((x) =>
-          x
-            .replace(/^\r?\n/u, "")
-            .replace(/\r?\n--\s*$/u, "")
-            .trim(),
-        )
-        .filter(Boolean)
-        .slice(0, 24))
+      for (
+        const child of body
+          .split("--" + boundary)
+          .slice(1)
+          .map((x) =>
+            x
+              .replace(/^\r?\n/u, "")
+              .replace(/\r?\n--\s*$/u, "")
+              .trim()
+          )
+          .filter(Boolean)
+          .slice(0, 24)
+      ) {
         visit(child, depth + 1);
+      }
       return;
     }
     const decoded = decodePart(
@@ -316,74 +337,119 @@ export function providerEvidence(input: ForwardingVerificationInput): {
   level: ProviderEvidence;
   reason: string;
 } {
-  const headers = [input.envelopeSender, input.from, input.authenticationResults, input.receivedSpf]
+  const headers = [
+    input.envelopeSender,
+    input.from,
+    input.authenticationResults,
+    input.receivedSpf,
+  ]
     .filter((value): value is string => typeof value === "string")
     .join(" ").toLowerCase();
-  const strongGoogle = /(?:smtp.gmail.com|google.com).{0,160}(?:dkim=pass|spf=pass)|(?:dkim=pass|spf=pass).{0,160}(?:smtp.gmail.com|google.com)/u.test(headers);
-  const strongProton = /(?:proton.me|protonmail.com).{0,160}(?:dkim=pass|spf=pass)|(?:dkim=pass|spf=pass).{0,160}(?:proton.me|protonmail.com)/u.test(headers);
-  if (strongGoogle) return { provider: "gmail", level: "strong", reason: "authenticated_google_chain" };
-  if (strongProton) return { provider: "proton", level: "strong", reason: "authenticated_proton_chain" };
+  const strongGoogle =
+    /(?:smtp.gmail.com|google.com).{0,160}(?:dkim=pass|spf=pass)|(?:dkim=pass|spf=pass).{0,160}(?:smtp.gmail.com|google.com)/u
+      .test(headers);
+  const strongProton =
+    /(?:proton.me|protonmail.com).{0,160}(?:dkim=pass|spf=pass)|(?:dkim=pass|spf=pass).{0,160}(?:proton.me|protonmail.com)/u
+      .test(headers);
+  if (strongGoogle) {
+    return {
+      provider: "gmail",
+      level: "strong",
+      reason: "authenticated_google_chain",
+    };
+  }
+  if (strongProton) {
+    return {
+      provider: "proton",
+      level: "strong",
+      reason: "authenticated_proton_chain",
+    };
+  }
   // Worker hints are useful for routing diagnostics only; they cannot authorize an action.
-  if (input.providerHint && input.providerHint !== "other") return { provider: input.providerHint, level: "weak", reason: "transport_hint_only" };
-  return { provider: "other", level: "unknown", reason: "no_authenticated_provider_evidence" };
+  if (input.providerHint && input.providerHint !== "other") {
+    return {
+      provider: input.providerHint,
+      level: "weak",
+      reason: "transport_hint_only",
+    };
+  }
+  return {
+    provider: "other",
+    level: "unknown",
+    reason: "no_authenticated_provider_evidence",
+  };
 }
 function allowed(provider: SourceProvider, host: string): boolean {
   const h = host.toLowerCase();
   return provider === "gmail"
     ? h === "google.com" || h.endsWith(".google.com")
     : provider === "proton"
-      ? h === "proton.me" ||
-        h.endsWith(".proton.me") ||
-        h === "protonmail.com" ||
-        h.endsWith(".protonmail.com") ||
-        h === "protonmail.ch" ||
-        h.endsWith(".protonmail.ch")
-      : false;
+    ? h === "proton.me" ||
+      h.endsWith(".proton.me") ||
+      h === "protonmail.com" ||
+      h.endsWith(".protonmail.com") ||
+      h === "protonmail.ch" ||
+      h.endsWith(".protonmail.ch")
+    : false;
 }
-export function safeProviderVerificationUrl(provider: SourceProvider, raw: unknown): string | null {
+export function safeProviderVerificationUrl(
+  provider: SourceProvider,
+  raw: unknown,
+): string | null {
   if (typeof raw !== "string" || raw.length > 2048) return null;
   try {
     const u = new URL(raw);
     const path = u.pathname.toLowerCase();
     if (u.protocol !== "https:" || !allowed(provider, u.hostname)) return null;
-    if (!/(confirm|verify|forward|mail\/vf-|mail\/u\/|mail\/ca\/)/u.test(path)) return null;
-    if (/(decline|reject|cancel|unsubscribe|privacy|help|preferences)/u.test(path)) return null;
+    if (
+      !/(confirm|verify|forward|mail\/vf-|mail\/u\/|mail\/ca\/)/u.test(path)
+    ) return null;
+    if (
+      /(decline|reject|cancel|unsubscribe|privacy|help|preferences)/u.test(path)
+    ) return null;
     return u.toString();
-  } catch { return null; }
+  } catch {
+    return null;
+  }
 }
 function positive(v: string): boolean {
   return (
-    /(confirm|verify|accept\s+forward|approve\s+forward|confirm\s+forward|confirm\s+request|confirmar|verificar|aceptar\s+reenv)/iu.test(
-      v,
-    ) &&
-    !/(decline|reject|cancel|unsubscribe|privacy|help|manage\s+preferences|rechazar|cancelar|privacidad|ayuda)/iu.test(
-      v,
-    )
+    /(confirm|verify|accept\s+forward|approve\s+forward|confirm\s+forward|confirm\s+request|confirmar|verificar|aceptar\s+reenv)/iu
+      .test(
+        v,
+      ) &&
+    !/(decline|reject|cancel|unsubscribe|privacy|help|manage\s+preferences|rechazar|cancelar|privacidad|ayuda)/iu
+      .test(
+        v,
+      )
   );
 }
 function semantics(p: SourceProvider, v: string): boolean {
   return p === "gmail"
-    ? /(gmail.{0,50}(forward|reenv)|forward.{0,50}(confirm|verify)|confirmaci[oó]n.{0,50}reenv)/iu.test(
+    ? /(gmail.{0,50}(forward|reenv)|forward.{0,50}(confirm|verify)|confirmaci[oó]n.{0,50}reenv)/iu
+      .test(
         v,
       )
     : p === "proton"
-      ? /(proton.{0,50}(forward|reenv|invitation)|accept\s+forwarding|aceptar\s+reenv)/iu.test(
-          v,
-        )
-      : false;
+    ? /(proton.{0,50}(forward|reenv|invitation)|accept\s+forwarding|aceptar\s+reenv)/iu
+      .test(
+        v,
+      )
+    : false;
 }
 export function detectForwardingVerification(
   input: ForwardingVerificationInput | string | null,
   legacyText?: string,
 ): ForwardingVerificationDetection | null {
-  const i =
-    typeof input === "object" && input !== null
-      ? input
-      : { subject: input, text: legacyText ?? "" };
+  const i = typeof input === "object" && input !== null
+    ? input
+    : { subject: input, text: legacyText ?? "" };
   const evidence = providerEvidence(i);
   const provider = evidence.provider;
   const combined = String(i.subject ?? "") + "\n" + i.text;
-  if (evidence.level !== "strong" || !semantics(provider, combined)) return null;
+  if (evidence.level !== "strong" || !semantics(provider, combined)) {
+    return null;
+  }
   const candidates = [
     ...(i.links ?? []),
     ...(combined.match(/https:\/\/[^\s<>"']+/giu) ?? []).map((href) => ({
@@ -394,7 +460,10 @@ export function detectForwardingVerification(
   ];
   let url: string | null = null;
   for (const link of candidates) {
-    const u = safeProviderVerificationUrl(provider, link.href.replace(/[),.;]+$/u, ""));
+    const u = safeProviderVerificationUrl(
+      provider,
+      link.href.replace(/[),.;]+$/u, ""),
+    );
     if (
       u &&
       positive(
@@ -410,17 +479,17 @@ export function detectForwardingVerification(
     }
   }
   const code =
-    /(?:confirmation\s+code|confirmaci[oó]n\s+de\s+c[oó]digo|verification\s+code|verificaci[oó]n\s+de\s+c[oó]digo|c[oó]digo(?:\s+de\s+verificaci[oó]n)?|code(?:\s+de\s+verification)?)[^A-Za-z0-9]{0,20}([A-Za-z0-9-]{6,32})/iu.exec(
-      combined,
-    )?.[1] ?? null;
-  const action: VerificationAction =
-    url && code
-      ? { kind: "safe_url_and_code", url, code }
-      : url
-        ? { kind: "safe_url", url }
-        : code
-          ? { kind: "code", code }
-          : { kind: "instructions_only" };
+    /(?:confirmation\s+code|confirmaci[oó]n\s+de\s+c[oó]digo|verification\s+code|verificaci[oó]n\s+de\s+c[oó]digo|c[oó]digo(?:\s+de\s+verificaci[oó]n)?|code(?:\s+de\s+verification)?)[^A-Za-z0-9]{0,20}([A-Za-z0-9-]{6,32})/iu
+      .exec(
+        combined,
+      )?.[1] ?? null;
+  const action: VerificationAction = url && code
+    ? { kind: "safe_url_and_code", url, code }
+    : url
+    ? { kind: "safe_url", url }
+    : code
+    ? { kind: "code", code }
+    : { kind: "instructions_only" };
   return {
     provider,
     action,
@@ -434,10 +503,25 @@ export function normalizeVerificationAction(
   provider: SourceProvider,
   rawUrl: unknown,
   rawCode: unknown,
-): { kind: "safe_url" | "code" | "safe_url_and_code" | "instructions_only"; label: string; url?: string; code?: string } {
+): {
+  kind: "safe_url" | "code" | "safe_url_and_code" | "instructions_only";
+  label: string;
+  url?: string;
+  code?: string;
+} {
   const url = safeProviderVerificationUrl(provider, rawUrl);
-  const code = typeof rawCode === "string" && /^[A-Za-z0-9-]{6,32}$/u.test(rawCode) ? rawCode : undefined;
-  if (url && code) return { kind: "safe_url_and_code", label: "Aprobar vinculación", url, code };
+  const code =
+    typeof rawCode === "string" && /^[A-Za-z0-9-]{6,32}$/u.test(rawCode)
+      ? rawCode
+      : undefined;
+  if (url && code) {
+    return {
+      kind: "safe_url_and_code",
+      label: "Aprobar vinculación",
+      url,
+      code,
+    };
+  }
   if (url) return { kind: "safe_url", label: "Aprobar vinculación", url };
   if (code) return { kind: "code", label: "Copiar código", code };
   return { kind: "instructions_only", label: "Ver cómo completarlo" };
@@ -465,8 +549,9 @@ export function isDifferentRelaySource(
   left: RelaySourceIdentity,
   right: RelaySourceIdentity,
 ): boolean {
-  if (!left.aliasId || !right.aliasId || left.aliasId !== right.aliasId)
+  if (!left.aliasId || !right.aliasId || left.aliasId !== right.aliasId) {
     return false;
+  }
   if (left.sourceId && right.sourceId) return left.sourceId !== right.sourceId;
   const a = (left.providerHint ?? "").trim().toLowerCase();
   const b = (right.providerHint ?? "").trim().toLowerCase();
@@ -481,16 +566,24 @@ export function decodeBase64Bytes(value: string): Uint8Array {
   return out;
 }
 
-export function extractGmailForwardingMailbox(text: string, aliasDomain: string): string | null {
+export function extractGmailForwardingMailbox(
+  text: string,
+  aliasDomain: string,
+): string | null {
   const contexts = [
     /(?:receive|receiving|forward)\s+(?:mail|messages)\s+from\s*[<\[]?([A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,})/iu,
     /(?:recibir|reenv[ií]o)\s+(?:correos?|mensajes?)\s+(?:de|desde)\s*[<\[]?([A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,})/iu,
   ];
   for (const expression of contexts) {
     const candidate = expression.exec(text)?.[1]?.toLowerCase();
-    if (!candidate || candidate.length > 320 || candidate.endsWith("@" + aliasDomain.toLowerCase())) continue;
+    if (
+      !candidate || candidate.length > 320 ||
+      candidate.endsWith("@" + aliasDomain.toLowerCase())
+    ) continue;
     const [local, host] = candidate.split("@");
-    if (!local || !host || /^(no-?reply|mailer-daemon|postmaster)$/iu.test(local)) continue;
+    if (
+      !local || !host || /^(no-?reply|mailer-daemon|postmaster)$/iu.test(local)
+    ) continue;
     return candidate;
   }
   return null;
