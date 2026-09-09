@@ -1,7 +1,7 @@
 -- V4: private setup intent, trusted inbound source identity, forwarding tests and delivery lineage.
 -- All browser access remains through email-relay-settings; these are service-role-only objects.
 
-create table private.email_relay_setup_intents (
+create table if not exists private.email_relay_setup_intents (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references auth.users(id) on delete cascade,
   alias_id uuid not null references private.email_relay_aliases(id) on delete cascade,
@@ -11,11 +11,11 @@ create table private.email_relay_setup_intents (
   expires_at timestamptz not null default now() + interval '24 hours'
 );
 alter table private.email_relay_setup_intents enable row level security;
-create index email_relay_setup_intents_owner_idx on private.email_relay_setup_intents(user_id,expires_at desc);
+create index if not exists email_relay_setup_intents_owner_idx on private.email_relay_setup_intents(user_id,expires_at desc);
 revoke all on table private.email_relay_setup_intents from public,anon,authenticated;
 grant select,insert,update,delete on private.email_relay_setup_intents to service_role;
 
-create table private.email_relay_link_tests (
+create table if not exists private.email_relay_link_tests (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references auth.users(id) on delete cascade,
   alias_id uuid not null references private.email_relay_aliases(id) on delete cascade,
@@ -30,11 +30,11 @@ create table private.email_relay_link_tests (
   updated_at timestamptz not null default now()
 );
 alter table private.email_relay_link_tests enable row level security;
-create index email_relay_link_tests_owner_idx on private.email_relay_link_tests(user_id,status,expires_at desc);
+create index if not exists email_relay_link_tests_owner_idx on private.email_relay_link_tests(user_id,status,expires_at desc);
 revoke all on table private.email_relay_link_tests from public,anon,authenticated;
 grant select,insert,update,delete on private.email_relay_link_tests to service_role;
 
-create table private.email_relay_deliveries (
+create table if not exists private.email_relay_deliveries (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references auth.users(id) on delete cascade,
   alias_id uuid not null references private.email_relay_aliases(id) on delete cascade,
@@ -50,8 +50,8 @@ create table private.email_relay_deliveries (
   created_at timestamptz not null default now()
 );
 alter table private.email_relay_deliveries enable row level security;
-create unique index email_relay_deliveries_retry_uidx on private.email_relay_deliveries(alias_id,raw_sha256,provider_hint);
-create index email_relay_deliveries_source_idx on private.email_relay_deliveries(source_id,received_at desc);
+create unique index if not exists email_relay_deliveries_retry_uidx on private.email_relay_deliveries(alias_id,raw_sha256,provider_hint);
+create index if not exists email_relay_deliveries_source_idx on private.email_relay_deliveries(source_id,received_at desc);
 revoke all on table private.email_relay_deliveries from public,anon,authenticated;
 grant select,insert,update,delete on private.email_relay_deliveries to service_role;
 
@@ -70,17 +70,17 @@ drop function if exists public.service_match_email_relay_source(uuid,text);
 drop function if exists public.service_list_email_relay_sources(uuid);
 create function public.service_list_email_relay_sources(p_user_id uuid)
 returns table(source_id uuid,alias_id uuid,provider text,label text,source_email text,status text,last_received_at timestamptz,last_financial_event_at timestamptz,last_delivery_at timestamptz,last_link_test_at timestamptz,created_at timestamptz,updated_at timestamptz)
-language sql stable security invoker set search_path='' as $
+language sql stable security invoker set search_path='' as $$
   select s.id,s.alias_id,s.provider,s.label,s.source_email,s.status,s.last_received_at,s.last_financial_event_at,s.last_delivery_at,s.last_link_test_at,s.created_at,s.updated_at
   from private.email_relay_sources s join private.email_relay_aliases a on a.id=s.alias_id and a.user_id=s.user_id
   where s.user_id=p_user_id and s.revoked_at is null and a.revoked_at is null order by s.created_at,s.id
-$;
+$$;
 revoke all on function public.service_list_email_relay_sources(uuid) from public,anon,authenticated;
 grant execute on function public.service_list_email_relay_sources(uuid) to service_role;
 
 create or replace function public.service_create_email_relay_setup_intent(p_user_id uuid,p_provider text)
 returns table(setup_intent_id uuid,provider text,expires_at timestamptz)
-language plpgsql security invoker set search_path='' as $$
+language plpgsql security invoker set search_path='' as $$$
 declare v_alias uuid; v_id uuid; v_expires timestamptz := now()+interval '24 hours';
 begin
   if p_provider not in ('gmail','outlook','proton','other') then raise exception 'invalid_email_relay_source_provider' using errcode='22023'; end if;
@@ -93,7 +93,7 @@ end $$;
 
 create or replace function public.service_match_email_relay_source(p_alias_id uuid,p_provider text,p_source_email text default null)
 returns table(source_id uuid,match_status text)
-language plpgsql stable security invoker set search_path='' as $$
+language plpgsql stable security invoker set search_path='' as $$$
 declare v_count integer; v_source uuid; v_email text:=nullif(lower(btrim(p_source_email)), '');
 begin
   if p_provider not in ('gmail','outlook','proton','other') then return query select null::uuid,'invalid_provider'::text; return; end if;
@@ -109,7 +109,7 @@ end $$;
 
 create or replace function public.service_upsert_email_relay_source_from_inbound(p_user_id uuid,p_alias_id uuid,p_provider text,p_source_email text)
 returns table(source_id uuid,match_status text)
-language plpgsql security invoker set search_path='' as $$
+language plpgsql security invoker set search_path='' as $$$
 declare v_email text:=nullif(lower(btrim(p_source_email)), ''); v_source uuid; v_count integer;
 begin
   if p_provider not in ('gmail','outlook','proton','other') then raise exception 'invalid_email_relay_source_provider' using errcode='22023'; end if;
@@ -132,7 +132,7 @@ begin
 end $$;
 
 create or replace function public.service_create_email_relay_forwarding_verification(p_user_id uuid,p_alias_id uuid,p_source_id uuid,p_source_event_id uuid,p_provider text,p_sender text,p_subject text,p_excerpt text,p_url text,p_code text,p_received_at timestamptz)
-returns uuid language plpgsql security invoker set search_path='' as $$
+returns uuid language plpgsql security invoker set search_path='' as $$$
 declare v_id uuid;
 begin
   if p_provider not in ('gmail','outlook','proton','other') then raise exception 'invalid_verification_provider' using errcode='22023'; end if;
@@ -148,7 +148,7 @@ begin
 end $$;
 
 create or replace function public.service_purge_email_relay_v4()
-returns void language plpgsql security invoker set search_path='' as $$
+returns void language plpgsql security invoker set search_path='' as $$$
 begin
   update private.email_relay_forwarding_verifications set status='expired',verification_url=null,verification_code=null,message_excerpt=null,updated_at=now() where status in ('pending','opened') and expires_at<=now();
   update private.email_relay_link_tests set status='expired',updated_at=now() where status='pending' and expires_at<=now();
@@ -159,7 +159,7 @@ end $$;
 
 create or replace function public.service_create_email_relay_link_test(p_user_id uuid,p_source_id uuid,p_challenge_hash text)
 returns table(link_test_id uuid,expires_at timestamptz)
-language plpgsql security invoker set search_path='' as $$
+language plpgsql security invoker set search_path='' as $$$
 declare v_alias uuid; v_provider text; v_id uuid; v_expires timestamptz:=now()+interval '30 minutes';
 begin
   if p_challenge_hash !~ '^[A-Za-z0-9_-]{43}$' then raise exception 'invalid_link_test_hash' using errcode='22023'; end if;
@@ -171,7 +171,7 @@ begin
 end $$;
 
 create or replace function public.service_complete_email_relay_link_test(p_alias_id uuid,p_provider text,p_challenge_hash text)
-returns uuid language plpgsql security invoker set search_path='' as $$
+returns uuid language plpgsql security invoker set search_path='' as $$$
 declare v_source uuid; v_test uuid;
 begin
   update private.email_relay_link_tests set status='received',received_at=now(),updated_at=now() where alias_id=p_alias_id and provider=p_provider and challenge_hash=p_challenge_hash and status='pending' and expires_at>now() returning id,source_id into v_test,v_source;
