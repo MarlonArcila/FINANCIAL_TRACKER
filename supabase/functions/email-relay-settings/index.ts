@@ -13,6 +13,7 @@ import {
   requireUser,
 } from "../_shared/supabase.ts";
 import { requiredEnv } from "../_shared/env.ts";
+import { normalizeVerificationAction } from "../_shared/email-relay.ts";
 
 type SourceProvider = "gmail" | "outlook" | "proton" | "other";
 function token(): string {
@@ -42,53 +43,17 @@ function provider(value: unknown): SourceProvider {
     ? value
     : "other";
 }
-function safeVerificationUrl(
-  provider: SourceProvider,
-  value: unknown,
-): string | null {
-  if (typeof value !== "string") return null;
-  try {
-    const url = new URL(value);
-    const host = url.hostname.toLowerCase();
-    const google = host === "google.com" || host.endsWith(".google.com");
-    const proton =
-      host === "proton.me" ||
-      host.endsWith(".proton.me") ||
-      host === "protonmail.com" ||
-      host.endsWith(".protonmail.com");
-    return url.protocol === "https:" &&
-      ((provider === "gmail" && google) || (provider === "proton" && proton))
-      ? url.toString()
-      : null;
-  } catch {
-    return null;
-  }
-}
-
 function verificationAction(value: any): {
   kind: "safe_url" | "code" | "safe_url_and_code" | "instructions_only";
   label: string;
   url?: string;
   code?: string;
 } {
-  const url = safeVerificationUrl(
+  return normalizeVerificationAction(
     provider(value.provider),
     value.verification_url,
+    value.verification_code,
   );
-  const code =
-    typeof value.verification_code === "string"
-      ? value.verification_code
-      : null;
-  if (url && code)
-    return {
-      kind: "safe_url_and_code",
-      label: "Aprobar vinculación",
-      url,
-      code,
-    };
-  if (url) return { kind: "safe_url", label: "Aprobar vinculación", url };
-  if (code) return { kind: "code", label: "Copiar código", code };
-  return { kind: "instructions_only", label: "Ver cómo completarlo" };
 }
 function defaultLabel(value: SourceProvider): string {
   if (value === "gmail") return "Gmail";
@@ -136,28 +101,28 @@ Deno.serve((request) =>
           sources: [],
         });
       }
-      if (action === "add_source") {
+      if (action === "add_source")
+        throw new HttpError(410, "manual_trusted_source_creation_removed");
+      if (action === "select_provider") {
         await assertEntitled(service, user.id);
-        const p = provider(body.provider);
-        const label = (body.label ?? "").trim() || defaultLabel(p);
-        if (label.length > 80)
-          throw new HttpError(422, "source_label_too_long");
-        const { data, error } = await service
-          .rpc("service_create_email_relay_source", {
-            p_user_id: user.id,
-            p_provider: p,
-            p_label: label,
-          })
-          .single();
+        const { data, error } = await service.rpc(
+          "service_create_email_relay_setup_intent",
+          { p_user_id: user.id, p_provider: provider(body.provider) },
+        ).single();
         if (error) throw error;
-        return json({
-          source: {
-            id: (data as any).source_id,
-            provider: (data as any).provider,
-            label: (data as any).label,
-            state: stateName((data as any).status),
-          },
-        });
+        return json({ setupIntent: { id: (data as any).setup_intent_id, provider: (data as any).provider, expiresAt: (data as any).expires_at } });
+      }
+      if (action === "create_link_test") {
+        if (!body.sourceId) throw new HttpError(422, "source_id_required");
+        await assertEntitled(service, user.id);
+        const challenge = "CF-" + token().slice(0, 10).toUpperCase();
+        const { data, error } = await service.rpc("service_create_email_relay_link_test", {
+          p_user_id: user.id,
+          p_source_id: body.sourceId,
+          p_challenge_hash: await sha256Base64Url(challenge),
+        }).single();
+        if (error) throw error;
+        return json({ testSubject: "CapitalFlow prueba " + challenge, testExpiresAt: (data as any).expires_at });
       }
       if (action === "revoke_source") {
         if (!body.sourceId) throw new HttpError(422, "source_id_required");
@@ -171,14 +136,12 @@ Deno.serve((request) =>
       }
       if (
         action === "mark_verification_opened" ||
-        action === "resolve_verification" ||
         action === "dismiss_verification"
       ) {
         if (!body.verificationId)
           throw new HttpError(422, "verification_id_required");
         const map: Record<string, string> = {
           mark_verification_opened: "opened",
-          resolve_verification: "resolved",
           dismiss_verification: "dismissed",
         };
         const { data, error } = await service.rpc(
@@ -230,9 +193,8 @@ Deno.serve((request) =>
           id: s.source_id,
           provider: s.provider,
           label: s.label,
+          email: s.source_email ?? null,
           state: stateName(s.status),
-          gmailConfirmationUrl: s.gmail_confirmation_url ?? null,
-          gmailConfirmationCode: s.gmail_confirmation_code ?? null,
           lastReceivedAt: s.last_received_at ?? null,
           lastFinancialEventAt: s.last_financial_event_at ?? null,
         })),
@@ -247,8 +209,6 @@ Deno.serve((request) =>
           subject: v.subject,
           excerpt: v.excerpt,
           action: verificationAction(v),
-          verificationUrl: verificationAction(v).url ?? null,
-          verificationCode: verificationAction(v).code ?? null,
           receivedAt: v.received_at,
           expiresAt: v.expires_at,
         })),

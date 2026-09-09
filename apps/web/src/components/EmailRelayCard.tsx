@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { invokeFunction } from "../lib/api";
 
 type RelayState =
@@ -15,6 +15,7 @@ type RelaySource = {
   id: string;
   provider: SourceProvider;
   label: string;
+  email?: string | null;
   state: RelayState;
   lastReceivedAt?: string | null;
   lastFinancialEventAt?: string | null;
@@ -34,8 +35,6 @@ type Verification = {
     url?: string;
     code?: string;
   };
-  verificationUrl: string | null;
-  verificationCode: string | null;
   receivedAt: string;
   expiresAt: string;
 };
@@ -47,6 +46,8 @@ type RelayResponse = {
   sources?: RelaySource[];
   catalog?: CatalogItem[];
   verifications?: Verification[];
+  testSubject?: string;
+  testExpiresAt?: string;
 };
 const labels: Record<RelayState, string> = {
   NOT_CONFIGURED: "No configurado",
@@ -105,11 +106,12 @@ export function EmailRelayCard() {
     sources: [],
   });
   const [provider, setProvider] = useState<SourceProvider>("gmail");
-  const [sourceLabel, setSourceLabel] = useState("");
   const [selected, setSelected] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
-  const [setupStep, setSetupStep] = useState(1);
+  const [selectedProvider, setSelectedProvider] = useState<SourceProvider | null>(null);
+  const [providerDialogOpen, setProviderDialogOpen] = useState(false);
+  const launcherRef = useRef<HTMLButtonElement>(null);
   const load = async () => {
     try {
       const data = await invokeFunction<RelayResponse>("email-relay-settings", {
@@ -167,7 +169,7 @@ export function EmailRelayCard() {
         ...extra,
       });
       if (
-        (action === "generate" || action === "rotate") &&
+        (action === "generate" || action === "rotate" || action === "create_link_test") &&
         data.address !== undefined
       )
         setState((prev) => ({
@@ -323,28 +325,15 @@ export function EmailRelayCard() {
                       </small>
                     ) : null}
                     {state.verifications
-                      ?.filter(
-                        (verification) =>
-                          verification.sourceId === source.id &&
-                          verification.verificationUrl,
-                      )
+                      ?.filter((verification) => verification.sourceId === source.id && verification.action?.url)
                       .map((verification) => (
-                        <a
-                          key={verification.id}
-                          className="primary-button"
-                          href={verification.verificationUrl!}
-                          target="_blank"
-                          rel="noreferrer noopener"
-                          onClick={() =>
-                            void act("mark_verification_opened", {
-                              verificationId: verification.id,
-                            })
-                          }
-                        >
-                          Aprobar vinculación
+                        <a key={verification.id} className="primary-button" href={verification.action?.url} target="_blank" rel="noopener noreferrer" onClick={() => void act("mark_verification_opened", { verificationId: verification.id })}>
+                          Vincular correo
                         </a>
                       ))}
+                    <small>Correo: {source.email ?? "pendiente de identificar"}</small>
                   </div>
+                  <button className="secondary-button" type="button" disabled={busy || source.state === "ACTIVE"} onClick={() => void act("create_link_test", { sourceId: source.id })}>Generar prueba de reenvío</button>
                   <button
                     className="ghost-danger"
                     type="button"
@@ -360,8 +349,7 @@ export function EmailRelayCard() {
             </div>
           ) : (
             <p className="muted">
-              Aún no has agregado una fuente. Puedes agregar varias a la misma
-              dirección.
+              Aún no hay una fuente confiable: aparecerá cuando llegue evidencia autenticada del reenvío.
             </p>
           )}
         </section>
@@ -378,49 +366,20 @@ export function EmailRelayCard() {
                 <span className="provider-badge">
                   {providerNames[v.provider]}
                 </span>
-                <strong>Verificación de reenvío recibida</strong>
+                <strong>Confirmación recibida</strong>
                 <small>
                   Recibida: {new Date(v.receivedAt).toLocaleString("es-CO")}
                 </small>
                 {v.excerpt ? <p>{v.excerpt}</p> : null}
-                {v.verificationCode ? (
-                  <p>
-                    Código: <code>{v.verificationCode}</code>
-                  </p>
-                ) : null}
+                {v.action?.code ? <p>Código: <code>{v.action.code}</code></p> : null}
               </div>
               <div className="button-row">
-                {v.verificationUrl ? (
-                  <a
-                    className="primary-button"
-                    href={v.verificationUrl}
-                    target="_blank"
-                    rel="noreferrer noopener"
-                    onClick={() =>
-                      void act("mark_verification_opened", {
-                        verificationId: v.id,
-                      })
-                    }
-                  >
-                    Aprobar vinculación
-                  </a>
+                {v.action?.url ? (
+                  <a className="primary-button" href={v.action.url} target="_blank" rel="noopener noreferrer" onClick={() => void act("mark_verification_opened", { verificationId: v.id })}>Vincular correo</a>
                 ) : null}
-                {v.verificationCode ? (
-                  <button
-                    className="secondary-button"
-                    type="button"
-                    onClick={() => void copy(v.verificationCode!, "Código")}
-                  >
-                    Copiar código
-                  </button>
+                {v.action?.code ? (
+                  <button className="secondary-button" type="button" onClick={() => void copy(v.action!.code!, "Código")}>Copiar código</button>
                 ) : null}
-                <button
-                  className="secondary-button"
-                  type="button"
-                  onClick={() => void load()}
-                >
-                  Ya lo confirmé — comprobar estado
-                </button>
                 <button
                   className="ghost-danger"
                   type="button"
@@ -436,146 +395,29 @@ export function EmailRelayCard() {
         </section>
       ) : null}
       {state.aliasHint || state.address ? (
-        <section
-          className="relay-section setup-assistant"
-          aria-label="Asistente de vinculación"
-        >
-          <p className="eyebrow">Paso {setupStep} de 5</p>
-          <h3>
-            {setupStep === 1
-              ? "Vincula tu correo"
-              : setupStep === 2
-                ? "Configura el reenvío"
-                : setupStep === 3
-                  ? "Esperando confirmación"
-                  : setupStep === 4
-                    ? "Comprueba el primer reenvío"
-                    : "Vinculación completada"}
-          </h3>
-          <p>
-            {provider === "gmail"
-              ? "CapitalFlow recibirá únicamente los mensajes que tú decidas reenviar. No solicitaremos tu contraseña de Gmail."
-              : provider === "proton"
-                ? "Crea una regla de reenvío y vuelve a CapitalFlow para aprobar la invitación si Proton la envía."
-                : "Configura el reenvío o una regla selectiva y vuelve a CapitalFlow. Comprobaremos el primer mensaje automáticamente."}
-          </p>
-          <div
-            className="setup-progress"
-            aria-label={`Progreso: paso ${setupStep} de 5`}
-          >
-            <span className={`setup-progress-step-${setupStep}`} />
-          </div>
-          <div className="button-row">
-            <button
-              className="primary-button"
-              type="button"
-              onClick={() => {
-                if (setupStep === 1)
-                  void act("add_source", {
-                    provider,
-                    label: sourceLabel.trim() || providerNames[provider],
-                  }).then(() => setSetupStep(2));
-                else setSetupStep((step) => Math.min(5, step + 1));
-              }}
-            >
-              {setupStep === 1
-                ? provider === "gmail"
-                  ? "Vincular Gmail"
-                  : provider === "outlook"
-                    ? "Vincular Outlook"
-                    : provider === "proton"
-                      ? "Vincular Proton Mail"
-                      : "Vincular correo"
-                : setupStep === 3
-                  ? "Actualizar estado"
-                  : "Siguiente"}
-            </button>
-            {setupStep === 3 ? (
-              <button
-                className="secondary-button"
-                type="button"
-                onClick={() => void load()}
-              >
-                Volver a CapitalFlow
-              </button>
-            ) : null}
-          </div>
-          <details>
-            <summary>¿Necesitas ayuda?</summary>
-            <p>
-              Sal de CapitalFlow para configurar tu proveedor y vuelve aquí.
-              Nunca compartas ni captures la dirección completa.
-            </p>
-          </details>
-        </section>
+        <>
+          <section className="relay-section setup-assistant" aria-label="Asistente de vinculación">
+            <p className="eyebrow">Paso {state.sources?.some((source) => source.state === "ACTIVE") ? 5 : state.verifications?.length ? 3 : selectedProvider ? 2 : 1} de 5</p>
+            <h3>{state.sources?.some((source) => source.state === "ACTIVE") ? "Fuente activa" : selectedProvider ? "Configura el reenvío" : "Vincula tu correo"}</h3>
+            <p>El progreso es evidencia del backend: elegir proveedor solo abre esta guía; no crea una fuente confiable ni puede marcarla activa.</p>
+            <button ref={launcherRef} className="primary-button" type="button" disabled={busy} onClick={() => setProviderDialogOpen(true)}>Vincular correo</button>
+            {state.testSubject ? <div className="notice notice-info"><strong>Prueba de reenvío</strong><p>Desde otro buzón, envía este asunto a tu correo de {providerNames[selectedProvider ?? provider]}. La regla selectiva debe reenviarlo a CapitalFlow; enviarlo directo a la dirección privada no sirve.</p><code>{state.testSubject}</code><button type="button" className="secondary-button" onClick={() => void copy(state.testSubject!, "Asunto de prueba")}>Copiar asunto</button></div> : null}
+            <details><summary>¿Necesitas ayuda?</summary><p>Configura una regla selectiva en tu proveedor. No envíes un correo directamente a la dirección privada: eso no prueba el reenvío del proveedor.</p></details>
+          </section>
+          {providerDialogOpen ? (
+            <div className="relay-dialog-backdrop" role="presentation">
+              <div className="relay-dialog" role="dialog" aria-modal="true" aria-labelledby="relay-provider-dialog-title">
+                <div className="relay-header"><h3 id="relay-provider-dialog-title">Elige tu proveedor</h3><button type="button" className="text-button" onClick={() => { setProviderDialogOpen(false); launcherRef.current?.focus(); }}>Cerrar</button></div>
+                <p>La selección guarda una intención privada de corta duración; la fuente aparece solo con evidencia de reenvío autenticada.</p>
+                <div className="button-row">{(Object.keys(providerNames) as SourceProvider[]).map((choice) => <button key={choice} type="button" className="secondary-button" disabled={busy} onClick={() => { setProvider(choice); setSelectedProvider(choice); setProviderDialogOpen(false); void act("select_provider", { provider: choice }); }}>{providerNames[choice]}</button>)}</div>
+              </div>
+            </div>
+          ) : null}
+          {selectedProvider ? <details className="relay-guide" open><summary>Configuración para {providerNames[selectedProvider]}</summary><p>{selectedProvider === "gmail" ? "Gmail enviará una confirmación a CapitalFlow. Cuando llegue una acción segura, usa «Vincular correo». Después crea una regla temporal de prueba y finalmente un filtro financiero." : "Crea una regla selectiva hacia la dirección privada y prueba el reenvío. No recomendamos el reenvío global."}</p></details> : null}
+        </>
       ) : null}
       {waiting ? (
-        <section
-          className="notice relay-waiting"
-          role="status"
-          aria-live="polite"
-        >
-          <strong>
-            Esperando la confirmación de {providerNames[provider]}
-          </strong>
-          <p>
-            CapitalFlow la detectará automáticamente. Puedes volver cuando
-            termines en tu proveedor.
-          </p>
-          <button
-            className="secondary-button"
-            type="button"
-            onClick={() => void load()}
-          >
-            Actualizar estado
-          </button>
-        </section>
-      ) : null}
-      {state.aliasHint || state.address ? (
-        <section className="relay-section relay-source-form">
-          <h3>Agregar otro correo</h3>
-          <label className="field">
-            Proveedor
-            <select
-              value={provider}
-              onChange={(e) => setProvider(e.target.value as SourceProvider)}
-              disabled={busy}
-            >
-              <option value="gmail">Gmail</option>
-              <option value="outlook">Outlook / Hotmail</option>
-              <option value="proton">Proton Mail</option>
-              <option value="other">Otro</option>
-            </select>
-          </label>
-          <label className="field">
-            Nombre opcional
-            <input
-              value={sourceLabel}
-              onChange={(e) => setSourceLabel(e.target.value)}
-              maxLength={80}
-              placeholder={`${providerNames[provider]} personal`}
-            />
-          </label>
-          <button
-            className="primary-button"
-            type="button"
-            disabled={busy}
-            onClick={() =>
-              void act("add_source", {
-                provider,
-                label: sourceLabel.trim() || providerNames[provider],
-              })
-            }
-          >
-            {provider === "gmail"
-              ? "Vincular Gmail"
-              : provider === "outlook"
-                ? "Vincular Outlook"
-                : provider === "proton"
-                  ? "Vincular Proton Mail"
-                  : "Vincular correo"}
-          </button>
-        </section>
+        <section className="notice relay-waiting" role="status" aria-live="polite"><strong>Esperando la confirmación de {providerNames[selectedProvider ?? provider]}</strong><p>CapitalFlow actualiza el estado automáticamente mientras esta pantalla está abierta.</p></section>
       ) : null}
       <details className="relay-guide">
         <summary>Configuración del reenvío</summary>
@@ -642,7 +484,7 @@ export function EmailRelayCard() {
           </li>
         </ol>
         <p className="notice">
-          Los filtros de Gmail se aplican a los mensajes nuevos. Revisa los
+          CapitalFlow no importa correos antiguos. Los filtros de Gmail se aplican a los mensajes nuevos. Revisa los
           resultados de búsqueda antes de crear el filtro. No necesitas activar
           el reenvío global de toda tu cuenta.
         </p>

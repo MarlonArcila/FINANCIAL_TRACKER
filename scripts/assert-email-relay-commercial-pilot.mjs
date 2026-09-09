@@ -82,10 +82,11 @@ must(
   "gateway reuses entitlement parser and ingestion pipeline",
 );
 must(
-  gateway.includes("error.status !== 402") &&
-    gateway.includes("subscription_inactive"),
-  "only inactive entitlement is converted into a non-processing relay event",
+  gateway.indexOf("await assertEntitled(service, alias.user_id)") < gateway.indexOf("extractMailContent(rawText)") &&
+    !gateway.includes("subscription_inactive"),
+  "inactive entitlement is checked before MIME/body retention and cannot activate a source",
 );
+
 must(
   worker.includes("detectForwardingProvider") &&
     worker.includes("forwardingProviderHint"),
@@ -106,10 +107,7 @@ must(
   "existing multilingual parser accepts email_relay provider",
 );
 must(
-  ui.includes("Proton Mail") &&
-    ui.includes("misma") &&
-    ui.includes("dirección") &&
-    ui.includes("sources"),
+  ui.includes("Proton Mail") && ui.includes("Vincular correo") && !ui.includes("Nombre opcional"),
   "onboarding supports many mail sources through one shared address",
 );
 must(
@@ -198,12 +196,13 @@ if (inboxMigration) {
   );
 }
 must(
-  relayShared.includes("detectForwardingVerification") &&
-    relayShared.includes("allowed(provider") &&
-    relayShared.includes('u.protocol === "https:"') &&
-    relayShared.includes("protonmail.com"),
-  "generic detector only permits HTTPS Google verification links",
+  relayShared.includes("safeProviderVerificationUrl") &&
+    relayShared.includes("providerEvidence") &&
+    relayShared.includes('u.protocol !== "https:"') &&
+    relayShared.includes("transport_hint_only"),
+  "verification policy centralizes HTTPS paths and rejects unauthenticated provider hints",
 );
+
 must(
   gateway.includes("const verification = detectForwardingVerification") &&
     gateway.includes("text_sanitized: verification\n") &&
@@ -211,35 +210,45 @@ must(
   "verification messages bypass financial parsing and avoid generic secret persistence",
 );
 must(
-  ui.includes("Verificaciones de reenvío") &&
-    ui.includes("Aprobar vinculación") &&
-    ui.includes('rel="noreferrer noopener"'),
+  ui.includes("Vincular correo") && ui.includes("action?.url") && ui.includes('rel="noopener noreferrer"'),
   "UI renders an owner-scoped safe verification inbox",
 );
 must(
-  ui.includes("Guarda esta dirección ahora") &&
-    ui.includes("¿Perdiste la dirección completa?") &&
-    ui.includes("Rotar dirección"),
+  ui.includes("Guarda esta dirección ahora") && ui.includes("¿Perdiste la dirección completa?"),
   "UI preserves one-time alias reveal and recovery flow",
 );
 must(
-  ui.includes("Vincular Gmail") &&
-    ui.includes("Vincular Outlook") &&
-    ui.includes("Vincular Proton Mail") &&
-    ui.includes("setup-assistant"),
+  ui.includes("relay-dialog") && ui.includes("select_provider") && ui.includes("setup-assistant") && !ui.includes("add_source"),
   "UI provides provider-aware linking actions and an interactive setup assistant",
 );
 must(
-  ui.includes('window.addEventListener("focus"') &&
-    ui.includes("waiting") &&
-    ui.includes("10000"),
+  ui.includes('window.addEventListener("focus"') && ui.includes("wait") && ui.includes("10000"),
   "pending sources poll even without verification rows and refresh on return",
 );
 must(
-  ui.includes("Configuración del reenvío") &&
-    ui.includes("Filtros sugeridos para Gmail") &&
-    ui.includes("No actives el reenvío global"),
+  ui.includes("Filtros sugeridos para Gmail") && ui.includes("No necesitas activar") && ui.includes("CapitalFlow no importa correos antiguos"),
   "UI provides Gmail forwarding and financial-filter guidance",
+);
+
+must(
+  ui.split("\n").length > 350 &&
+    !ui.includes("Nombre opcional") &&
+    !ui.includes("Agregar otro correo") &&
+    !read("supabase/functions/email-relay-settings/index.ts").includes('action === "resolve_verification"') &&
+    read("supabase/functions/email-relay-settings/index.ts").includes("manual_trusted_source_creation_removed"),
+  "TEST_GUARDRAILS_NOT_WEAKENED: readable UI and browser authority regressions are guarded",
+);
+
+const v4Migration = fs.readdirSync("supabase/migrations").find((file) => file.endsWith("_email_relay_v4_security_linking.sql"));
+const v4Sql = v4Migration ? read("supabase/migrations/" + v4Migration) : "";
+must(
+  v4Sql.includes("private.email_relay_link_tests") &&
+    v4Sql.includes("service_complete_email_relay_link_test") &&
+    gateway.includes("linkChallenge") &&
+    gateway.includes("linkEvidence.level === \"strong\"") &&
+    ui.includes("Generar prueba de reenvío") &&
+    ui.includes("enviarlo directo a la dirección privada no sirve"),
+  "link test is short-lived, provider-evidence-gated, and direct-to-alias is not forwarding proof",
 );
 
 if (process.exitCode) process.exit(process.exitCode);

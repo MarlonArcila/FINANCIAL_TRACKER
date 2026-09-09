@@ -7,6 +7,8 @@ import {
   EMAIL_RELAY_MAX_RAW_BYTES,
   extractAliasToken,
   extractMailContent,
+  extractGmailForwardingMailbox,
+  providerEvidence,
   sanitizeRelayHeader,
   sha256Hex,
   verifyRelaySignature,
@@ -122,6 +124,7 @@ Deno.serve(async (request) => {
       .rpc("service_match_email_relay_source", {
         p_alias_id: alias.alias_id,
         p_provider: sourceProvider,
+        p_source_email: null,
       })
       .single();
     if (sourceMatchError) throw sourceMatchError;
@@ -156,10 +159,19 @@ Deno.serve(async (request) => {
       !Number.isNaN(Date.parse(body.receivedAt))
         ? new Date(body.receivedAt).toISOString()
         : new Date().toISOString();
-    const occurredAt =
-      typeof body.date === "string" && !Number.isNaN(Date.parse(body.date))
-        ? new Date(body.date).toISOString()
-        : receivedAt;
+    const parsedDate = typeof body.date === "string" ? Date.parse(body.date) : Number.NaN;
+    const receivedMs = Date.parse(receivedAt);
+    const occurredAt = Number.isFinite(parsedDate) && Math.abs(parsedDate - receivedMs) <= 366 * 24 * 60 * 60 * 1000
+      ? new Date(parsedDate).toISOString()
+      : receivedAt;
+    // Entitlement is intentionally checked before MIME extraction or source-event body storage.
+    // Inactive subscriptions receive no parsed or retained email body and cannot activate a source.
+    try {
+      await assertEntitled(service, alias.user_id);
+    } catch (error) {
+      if (!(error instanceof HttpError) || error.status !== 402) throw error;
+      return json({ accepted: true, financial: false, entitlement: "inactive" }, 202);
+    }
     const rawText = new TextDecoder("utf-8", { fatal: false }).decode(rawBytes);
     const content = extractMailContent(rawText);
     const text = content.text;
@@ -183,7 +195,34 @@ Deno.serve(async (request) => {
         2000,
       ),
     });
+    const linkChallenge = /\bCapitalFlow\s+prueba\s+(CF-[A-Z0-9_-]{8,64})\b/iu.exec((detectedSubject ?? "") + "\n" + text)?.[1] ?? null;
+    const linkEvidence = providerEvidence({
+      providerHint: sourceProvider,
+      subject: detectedSubject,
+      text,
+      envelopeSender,
+      from,
+      authenticationResults: sanitizeRelayHeader(record(body.authentication).authenticationResults, 4000),
+      receivedSpf: sanitizeRelayHeader(record(body.authentication).receivedSpf, 2000),
+    });
+    if (linkChallenge && linkEvidence.level === "strong" && linkEvidence.provider !== "other") {
+      const { data: completedTest, error: linkTestError } = await service.rpc(
+        "service_complete_email_relay_link_test",
+        { p_alias_id: alias.alias_id, p_provider: linkEvidence.provider, p_challenge_hash: await sha256Base64Url(linkChallenge) },
+      );
+      if (linkTestError) throw linkTestError;
+      if (completedTest) return json({ accepted: true, financial: false, linkTest: "received" }, 202);
+    }
     const auth = record(body.authentication);
+    const evidence = providerEvidence({
+      providerHint: sourceProvider,
+      subject: detectedSubject,
+      text,
+      envelopeSender,
+      from,
+      authenticationResults: sanitizeRelayHeader(auth.authenticationResults, 4000),
+      receivedSpf: sanitizeRelayHeader(auth.receivedSpf, 2000),
+    });
     const metadata = verification
       ? {
           relay_version: "email-relay-v2-multi-source",
@@ -195,20 +234,9 @@ Deno.serve(async (request) => {
           relay_version: "email-relay-v2-multi-source",
           forwarding_provider_hint: sourceProvider,
           source_match_status: sourceMatch.match_status,
-          envelope_sender: envelopeSender,
-          authentication_results: sanitizeRelayHeader(
-            auth.authenticationResults,
-            4000,
-          ),
-          arc_authentication_results: sanitizeRelayHeader(
-            auth.arcAuthenticationResults,
-            4000,
-          ),
-          received_spf: sanitizeRelayHeader(auth.receivedSpf, 2000),
-          arc_seal: sanitizeRelayHeader(auth.arcSeal, 2000),
-          dkim_signature_present: Boolean(
-            sanitizeRelayHeader(auth.dkimSignature, 2000),
-          ),
+          provider_evidence: evidence.level,
+          provider_evidence_reason: evidence.reason,
+          original_sender_auth: evidence.level,
         };
     const sourcePayload = {
       user_id: alias.user_id,
@@ -222,7 +250,7 @@ Deno.serve(async (request) => {
       title_sanitized: verification ? "Forwarding verification" : subject,
       text_sanitized: verification
         ? "Forwarding verification message received."
-        : text.slice(0, 100_000),
+        : text.slice(0, 2_000),
       fingerprint,
       metadata,
       processing_status: "received",
@@ -262,11 +290,18 @@ Deno.serve(async (request) => {
           .rpc("service_match_email_relay_source", {
             p_alias_id: alias.alias_id,
             p_provider: verification.provider,
+            p_source_email: null,
           })
           .single();
       if (detectedMatchError) throw detectedMatchError;
       const detectedMatch = relaySourceMatchRow(detectedMatchData);
       sourceId = detectedMatch.source_id;
+      if (!sourceId) {
+        const sourceEmail = verification.provider === "gmail" ? extractGmailForwardingMailbox(text, domain) : null;
+        const { data: createdSource, error: createdSourceError } = await service.rpc("service_upsert_email_relay_source_from_inbound", { p_user_id: alias.user_id, p_alias_id: alias.alias_id, p_provider: verification.provider, p_source_email: sourceEmail });
+        if (createdSourceError) throw createdSourceError;
+        sourceId = typeof createdSource === "string" ? createdSource : (record(createdSource).source_id as string | undefined) ?? null;
+      }
       if (detectedMatch.match_status === "revoked") {
         await service
           .from("source_events")
@@ -330,32 +365,6 @@ Deno.serve(async (request) => {
         202,
       );
     }
-    try {
-      await assertEntitled(service, alias.user_id);
-    } catch (error) {
-      if (!(error instanceof HttpError) || error.status !== 402) throw error;
-      await service
-        .from("source_events")
-        .update({
-          processing_status: "ignored",
-          processing_error: "subscription_inactive",
-        })
-        .eq("id", source.id);
-      await service.rpc("service_update_email_relay_state", {
-        p_alias_id: alias.alias_id,
-        p_source_id: sourceId,
-        p_provider_hint: sourceProvider,
-        p_status: "active",
-        p_financial: false,
-        p_gmail_url: null,
-        p_gmail_code: null,
-      });
-      return json(
-        { accepted: true, financial: false, entitlement: "inactive" },
-        202,
-      );
-    }
-
     const { data: profile, error: profileError } = await service
       .from("profiles")
       .select("base_currency")
@@ -379,15 +388,7 @@ Deno.serve(async (request) => {
           metadata: { ...metadata, event_type: "non_financial" },
         })
         .eq("id", source.id);
-      await service.rpc("service_update_email_relay_state", {
-        p_alias_id: alias.alias_id,
-        p_source_id: sourceId,
-        p_provider_hint: sourceProvider,
-        p_status: "active",
-        p_financial: false,
-        p_gmail_url: null,
-        p_gmail_code: null,
-      });
+      // A direct, non-financial delivery proves only transport; it never activates a provider source.
       return json({ accepted: true, financial: false }, 202);
     }
     parsed.fingerprint = fingerprint;
@@ -424,7 +425,7 @@ Deno.serve(async (request) => {
         },
       })
       .eq("id", source.id);
-    await service.rpc("service_update_email_relay_state", {
+    if (evidence.level === "strong" && sourceId) await service.rpc("service_update_email_relay_state", {
       p_alias_id: alias.alias_id,
       p_source_id: sourceId,
       p_provider_hint: sourceProvider,
