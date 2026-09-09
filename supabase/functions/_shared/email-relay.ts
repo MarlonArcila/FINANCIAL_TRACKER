@@ -337,34 +337,10 @@ export function providerEvidence(input: ForwardingVerificationInput): {
   level: ProviderEvidence;
   reason: string;
 } {
-  const headers = [
-    input.envelopeSender,
-    input.from,
-    input.authenticationResults,
-    input.receivedSpf,
-  ]
-    .filter((value): value is string => typeof value === "string")
-    .join(" ").toLowerCase();
-  const strongGoogle =
-    /(?:smtp.gmail.com|google.com).{0,160}(?:dkim=pass|spf=pass)|(?:dkim=pass|spf=pass).{0,160}(?:smtp.gmail.com|google.com)/u
-      .test(headers);
-  const strongProton =
-    /(?:proton.me|protonmail.com).{0,160}(?:dkim=pass|spf=pass)|(?:dkim=pass|spf=pass).{0,160}(?:proton.me|protonmail.com)/u
-      .test(headers);
-  if (strongGoogle) {
-    return {
-      provider: "gmail",
-      level: "strong",
-      reason: "authenticated_google_chain",
-    };
-  }
-  if (strongProton) {
-    return {
-      provider: "proton",
-      level: "strong",
-      reason: "authenticated_proton_chain",
-    };
-  }
+  // Cloudflare's ForwardableEmailMessage exposes no typed authentication verdict.
+  // Header provenance/removal is not guaranteed by its documented Worker API.
+  // Even an authserv-id spelling mx.cloudflare.net is therefore untrusted here.
+  // Never authorize from these strings, including structurally valid PASS results.
   // Worker hints are useful for routing diagnostics only; they cannot authorize an action.
   if (input.providerHint && input.providerHint !== "other") {
     return {
@@ -376,7 +352,7 @@ export function providerEvidence(input: ForwardingVerificationInput): {
   return {
     provider: "other",
     level: "unknown",
-    reason: "no_authenticated_provider_evidence",
+    reason: "provider_authentication_unavailable",
   };
 }
 function allowed(provider: SourceProvider, host: string): boolean {
@@ -445,9 +421,17 @@ export function detectForwardingVerification(
     ? input
     : { subject: input, text: legacyText ?? "" };
   const evidence = providerEvidence(i);
-  const provider = evidence.provider;
+  if (evidence.level !== "strong") return null;
+  return extractAuthenticatedForwardingAction(i, evidence.provider);
+}
+
+/** Content extraction only. Caller must establish authentication separately. */
+export function extractAuthenticatedForwardingAction(
+  i: ForwardingVerificationInput,
+  provider: SourceProvider,
+): ForwardingVerificationDetection | null {
   const combined = String(i.subject ?? "") + "\n" + i.text;
-  if (evidence.level !== "strong" || !semantics(provider, combined)) {
+  if (!semantics(provider, combined)) {
     return null;
   }
   const candidates = [

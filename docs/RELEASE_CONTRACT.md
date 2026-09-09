@@ -108,3 +108,36 @@ The relay contract requires Cloudflare Email Routing to be enabled and ready for
 - Verification URL/code/excerpt are temporary: max seven days, cleared on dismissal/expiry/revocation. Raw MIME is transient only; parsed body storage is bounded and operational metadata never includes a verification URL, code, or alias token.
 - The Worker has an HTTPS Supabase gateway allowlist, HMAC nonce/timestamp signing, bounded payload and fetch timeout. x-capitalflow-key-id is sent for an overlap-ready HMAC rotation; do not rotate a production secret merely for a code release.
 - Release order remains: merge, additive migration, deploy changed relay Edge Functions, deploy Worker if changed, exact merged Vercel production deployment, then smoke. Manual Gmail confirmation and link-test UAT is last.
+
+## 11. Provider authentication security boundary
+
+`providerEvidence()` fails closed: the current Cloudflare Worker payload has no
+verified authentication provenance. Neither an authserv-id string (including
+`mx.cloudflare.net`) nor raw Authentication-Results, Received-SPF or unvalidated
+ARC authorizes verification actions, link-test completion or source attribution.
+The bounded diagnostic parser binds each verdict to the identity in its own
+clause; parsing a PASS does not establish trust. Provider domain signing sets are
+not enabled without sanitized real evidence and a trusted runtime boundary.
+
+`forwarding_provider_evidence` and `original_sender_authentication` are separate.
+The compatibility `original_sender_auth` level remains unknown until original
+sender authentication can independently be established. Existing candidate
+confidence thresholds remain unchanged.
+
+Action extraction fixtures remain covered separately from authentication;
+synthetic Google/Proton strings are explicitly rejected by the runtime gate.
+The permanent confusion regressions run in required `npm run test:all` CI via
+`test:email-relay`. No migration or Worker credential is needed for this hotfix.
+Provider verification/link tests remain unavailable safely until recovery of
+trusted runtime proof. Manual Gmail UAT remains prohibited pending V5 closure.
+
+Documentation reviewed 2026-09-09:
+- [Cloudflare inbound lifecycle](https://developers.cloudflare.com/email-service/concepts/email-lifecycle/)
+- [Cloudflare Worker API](https://developers.cloudflare.com/email-service/api/route-emails/email-handler/)
+- [Cloudflare authentication analytics](https://developers.cloudflare.com/email-service/observability/metrics-analytics/)
+- [Worker header availability report](https://github.com/cloudflare/workerd/issues/6740)
+
+The lifecycle documents authentication before Worker invocation, and analytics
+has verdicts. Neither establishes that arbitrary Worker headers have trusted
+provenance or binds analytics securely to the exact ingested message. Runtime
+signal is therefore INSUFFICIENT; no Analytics credential is added to production.
