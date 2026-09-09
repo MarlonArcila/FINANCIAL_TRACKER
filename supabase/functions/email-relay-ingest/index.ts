@@ -7,6 +7,7 @@ import {
   EMAIL_RELAY_MAX_RAW_BYTES,
   extractAliasToken,
   extractMailContent,
+  extractGmailForwardingMailbox,
   sanitizeRelayHeader,
   sha256Hex,
   verifyRelaySignature,
@@ -267,6 +268,12 @@ Deno.serve(async (request) => {
       if (detectedMatchError) throw detectedMatchError;
       const detectedMatch = relaySourceMatchRow(detectedMatchData);
       sourceId = detectedMatch.source_id;
+      if (!sourceId) {
+        const sourceEmail = verification.provider === "gmail" ? extractGmailForwardingMailbox(text, domain) : null;
+        const { data: createdSource, error: createdSourceError } = await service.rpc("service_upsert_email_relay_source_from_inbound", { p_user_id: alias.user_id, p_alias_id: alias.alias_id, p_provider: verification.provider, p_source_email: sourceEmail });
+        if (createdSourceError) throw createdSourceError;
+        sourceId = typeof createdSource === "string" ? createdSource : null;
+      }
       if (detectedMatch.match_status === "revoked") {
         await service
           .from("source_events")

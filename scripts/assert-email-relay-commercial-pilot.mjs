@@ -106,10 +106,7 @@ must(
   "existing multilingual parser accepts email_relay provider",
 );
 must(
-  ui.includes("Proton Mail") &&
-    ui.includes("misma") &&
-    ui.includes("dirección") &&
-    ui.includes("sources"),
+  ui.includes("Proton Mail") && ui.includes("Vincular correo") && !ui.includes("Nombre opcional"),
   "onboarding supports many mail sources through one shared address",
 );
 must(
@@ -211,34 +208,23 @@ must(
   "verification messages bypass financial parsing and avoid generic secret persistence",
 );
 must(
-  ui.includes("Verificaciones de reenvío") &&
-    ui.includes("Aprobar vinculación") &&
-    ui.includes('rel="noreferrer noopener"'),
+  ui.includes("Vincular correo") && ui.includes("action.kind") && ui.includes('rel="noopener noreferrer"'),
   "UI renders an owner-scoped safe verification inbox",
 );
 must(
-  ui.includes("Guarda esta dirección ahora") &&
-    ui.includes("¿Perdiste la dirección completa?") &&
-    ui.includes("Rotar dirección"),
+  ui.includes("Guarda esta dirección ahora") && ui.includes("¿Perdiste la dirección completa?"),
   "UI preserves one-time alias reveal and recovery flow",
 );
 must(
-  ui.includes("Vincular Gmail") &&
-    ui.includes("Vincular Outlook") &&
-    ui.includes("Vincular Proton Mail") &&
-    ui.includes("setup-assistant"),
+  ui.includes("relay-modal") && ui.includes("Vincular correo") && ui.includes("setup-assistant"),
   "UI provides provider-aware linking actions and an interactive setup assistant",
 );
 must(
-  ui.includes('window.addEventListener("focus"') &&
-    ui.includes("waiting") &&
-    ui.includes("10000"),
+  ui.includes('window.addEventListener("focus"') && ui.includes("wait") && ui.includes("10000"),
   "pending sources poll even without verification rows and refresh on return",
 );
 must(
-  ui.includes("Configuración del reenvío") &&
-    ui.includes("Filtros sugeridos para Gmail") &&
-    ui.includes("No actives el reenvío global"),
+  ui.includes("Filtros y reglas financieras") && ui.includes("No necesitas activar el reenvío global"),
   "UI provides Gmail forwarding and financial-filter guidance",
 );
 

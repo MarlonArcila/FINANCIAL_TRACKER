@@ -471,3 +471,9 @@ export function decodeBase64Bytes(value: string): Uint8Array {
   for (let i = 0; i < binary.length; i += 1) out[i] = binary.charCodeAt(i);
   return out;
 }
+
+export function extractGmailForwardingMailbox(text: string, aliasDomain: string): string | null {
+  const context=/(?:correo(?:s)?(?:s+de)?s+las+cuenta|mail(?:s+from)?s+thes+account|forward(?:ing)?s+(?:mail|messages)s+from)[^@]{0,120}([A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,})/iu.exec(text);
+  const candidate=context?.[1]?.toLowerCase() ?? null;
+  return candidate && !candidate.endsWith('@'+aliasDomain) && !/google|gmail.com$/iu.test(candidate.split('@')[0]??'') ? candidate.slice(0,320) : null;
+}

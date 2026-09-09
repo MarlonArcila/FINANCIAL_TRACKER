@@ -230,6 +230,7 @@ Deno.serve((request) =>
           id: s.source_id,
           provider: s.provider,
           label: s.label,
+          email: s.source_email ?? null,
           state: stateName(s.status),
           gmailConfirmationUrl: s.gmail_confirmation_url ?? null,
           gmailConfirmationCode: s.gmail_confirmation_code ?? null,
