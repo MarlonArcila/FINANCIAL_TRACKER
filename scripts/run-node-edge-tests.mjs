@@ -3,7 +3,7 @@ import { spawnSync } from "node:child_process";
 import { join } from "node:path";
 
 const sharedDir = "supabase/functions/_shared";
-const denoOnlyTests = new Set(["email-relay.test.ts"]);
+const denoOnlyTests = new Set(["email-provider-auth.test.ts", "email-relay.test.ts"]);
 const allTests = readdirSync(sharedDir)
   .filter((name) => name.endsWith(".test.ts"))
   .sort();
