@@ -19,6 +19,8 @@ const sql = read(`supabase/migrations/${migration[0]}`);
 const gateway = read("supabase/functions/email-relay-ingest/index.ts");
 const ingestion = read("supabase/functions/_shared/ingestion.ts");
 const relayShared = read("supabase/functions/_shared/email-relay.ts");
+const providerAuth = read("supabase/functions/_shared/email-provider-auth.ts");
+const edgeDeno = read("supabase/functions/email-relay-ingest/deno.json");
 const worker = read("workers/email-relay/src/index.mjs");
 const parser = read("supabase/functions/_shared/financial-parser.ts");
 const ui = read("apps/web/src/components/EmailRelayCard.tsx");
@@ -204,7 +206,27 @@ must(
 );
 
 must(
-  gateway.includes("const verification = detectForwardingVerification") &&
+  providerAuth.includes('npm:mailauth@4.13.3') &&
+    providerAuth.includes('https://cloudflare-dns.com/dns-query') &&
+    providerAuth.includes('rrtype.toUpperCase() !== "TXT"') &&
+    providerAuth.includes('raw_mime_dkim_cryptographic_pass') &&
+    providerAuth.includes('raw_mime_arc_chain_cryptographic_pass') &&
+    providerAuth.includes('strongSignatureAlgorithm') &&
+    providerAuth.includes('signedHeaderBindsRecipient') &&
+    providerAuth.includes('signedHeaderBindsGoogleSystemSender') &&
+    providerAuth.includes('const GMAIL_SIGNING_ROOTS = ["google.com"] as const') &&
+    gateway.includes('expectedRecipient: recipient') &&
+    gateway.includes('linkEvidence.forwardingPath === true') &&
+    edgeDeno.includes('"frozen": true') &&
+    fs.existsSync('supabase/functions/email-relay-ingest/deno.lock') &&
+    !gateway.includes('const verification = detectForwardingVerification'),
+  "provider authorization uses pinned raw-MIME DKIM/ARC verification, frozen Deno lock, and bounded TXT DNS",
+);
+
+must(
+  gateway.includes("const forwardingAuth = await verifyForwardingProviderAuth(rawBytes, {") &&
+    gateway.includes("expectedRecipient: recipient") &&
+    gateway.includes("extractAuthenticatedForwardingAction") &&
     gateway.includes("text_sanitized: verification\n") &&
     gateway.includes('processing_status: "ignored"'),
   "verification messages bypass financial parsing and avoid generic secret persistence",

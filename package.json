@@ -37,7 +37,7 @@
     "pilot:legal": "node scripts/pilot-legal-privacy.mjs",
     "android:distribution": "bash scripts/build-android-distribution-artifacts.sh",
     "test:android-distribution": "node scripts/assert-android-distribution-whop-automation.mjs",
-    "test:email-relay": "node --test workers/email-relay/email-worker.test.mjs && deno test --no-lock supabase/functions/_shared/email-relay.test.ts && node scripts/assert-email-relay-commercial-pilot.mjs",
+    "test:email-relay": "node --test workers/email-relay/email-worker.test.mjs && deno test --config=supabase/functions/email-relay-ingest/deno.json --frozen supabase/functions/_shared/email-relay.test.ts supabase/functions/_shared/email-provider-auth.test.ts && node scripts/assert-email-relay-commercial-pilot.mjs",
     "test:web-bootstrap": "node scripts/assert-web-bootstrap-session.mjs",
     "test:execution-contract": "node scripts/assert-execution-contract.mjs",
     "doctor:release": "bash scripts/capitalflow-release-doctor.sh"

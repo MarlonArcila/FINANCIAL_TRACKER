@@ -1,15 +1,15 @@
 import { originalSenderAuth } from "../_shared/email-auth.ts";
+import { verifyForwardingProviderAuth } from "../_shared/email-provider-auth.ts";
 import { sha256Base64Url } from "../_shared/crypto.ts";
 import { optionalEnv, requiredEnv } from "../_shared/env.ts";
 import { parseMailMessage } from "../_shared/financial-parser.ts";
 import {
   decodeBase64Bytes,
-  detectForwardingVerification,
   EMAIL_RELAY_MAX_RAW_BYTES,
   extractAliasToken,
+  extractAuthenticatedForwardingAction,
   extractGmailForwardingMailbox,
   extractMailContent,
-  providerEvidence,
   sanitizeRelayHeader,
   sha256Hex,
   verifyRelaySignature,
@@ -197,43 +197,30 @@ Deno.serve(async (request) => {
     const fingerprint = await sha256Base64Url(
       `email_relay|${alias.alias_id}|${messageId ?? ""}|${computedHash}`,
     );
-    const verification = detectForwardingVerification({
-      providerHint: sourceProvider,
-      subject: detectedSubject,
-      text,
-      links: content.htmlLinks,
-      envelopeSender,
-      from,
-      authenticationResults: sanitizeRelayHeader(
-        record(body.authentication).authenticationResults,
-        4000,
-      ),
-      receivedSpf: sanitizeRelayHeader(
-        record(body.authentication).receivedSpf,
-        2000,
-      ),
+    const forwardingAuth = await verifyForwardingProviderAuth(rawBytes, {
+      expectedRecipient: recipient,
     });
+    const verification = forwardingAuth.level === "strong"
+      ? extractAuthenticatedForwardingAction(
+        {
+          providerHint: forwardingAuth.provider,
+          subject: detectedSubject,
+          text,
+          links: content.htmlLinks,
+          envelopeSender,
+          from,
+        },
+        forwardingAuth.provider,
+      )
+      : null;
     const linkChallenge =
       /\bCapitalFlow\s+prueba\s+(CF-[A-Z0-9_-]{8,64})\b/iu.exec(
         (detectedSubject ?? "") + "\n" + text,
       )?.[1] ?? null;
-    const linkEvidence = providerEvidence({
-      providerHint: sourceProvider,
-      subject: detectedSubject,
-      text,
-      envelopeSender,
-      from,
-      authenticationResults: sanitizeRelayHeader(
-        record(body.authentication).authenticationResults,
-        4000,
-      ),
-      receivedSpf: sanitizeRelayHeader(
-        record(body.authentication).receivedSpf,
-        2000,
-      ),
-    });
+    const linkEvidence = forwardingAuth;
     if (
       linkChallenge && linkEvidence.level === "strong" &&
+      linkEvidence.forwardingPath === true &&
       linkEvidence.provider !== "other"
     ) {
       const { data: completedTest, error: linkTestError } = await service.rpc(
@@ -252,26 +239,17 @@ Deno.serve(async (request) => {
         );
       }
     }
-    const auth = record(body.authentication);
-    const evidence = providerEvidence({
-      providerHint: sourceProvider,
-      subject: detectedSubject,
-      text,
-      envelopeSender,
-      from,
-      authenticationResults: sanitizeRelayHeader(
-        auth.authenticationResults,
-        4000,
-      ),
-      receivedSpf: sanitizeRelayHeader(auth.receivedSpf, 2000),
-    });
+    const evidence = forwardingAuth;
     // Match a trusted source only after provider authentication; hints cannot
     // attach financial events/candidates to another configured source.
     let sourceMatch: RelaySourceMatchRow = {
       source_id: null,
       match_status: "provider_authentication_unavailable",
     };
-    if (evidence.level === "strong") {
+    if (
+      evidence.level === "strong" &&
+      (verification !== null || evidence.forwardingPath === true)
+    ) {
       const { data: sourceMatchData, error: sourceMatchError } = await service
         .rpc("service_match_email_relay_source", {
           p_alias_id: alias.alias_id,
@@ -393,7 +371,9 @@ Deno.serve(async (request) => {
           {
             accepted: true,
             financial: false,
-            source: blockedByRevocation ? "revoked_or_setup_required" : "unavailable",
+            source: blockedByRevocation
+              ? "revoked_or_setup_required"
+              : "unavailable",
           },
           202,
         );
