@@ -116,8 +116,7 @@ verified authentication provenance. Neither an authserv-id string (including
 `mx.cloudflare.net`) nor raw Authentication-Results, Received-SPF or unvalidated
 ARC authorizes verification actions, link-test completion or source attribution.
 The bounded diagnostic parser binds each verdict to the identity in its own
-clause; parsing a PASS does not establish trust. Provider domain signing sets are
-not enabled without sanitized real evidence and a trusted runtime boundary.
+clause; parsing a PASS does not establish trust. The Gmail provider signing set is narrowly enabled only for the exact `google.com` cryptographic signing root and the signed Google system identities used by forwarding verification. This exception is based on reviewed sanitized real-world Google message evidence plus the raw-MIME cryptographic runtime boundary; expansion to another signing domain, sender identity, Outlook or Proton still requires provider-specific sanitized real evidence.
 
 `forwarding_provider_evidence` and `original_sender_authentication` are separate.
 The compatibility `original_sender_auth` level remains unknown until original
@@ -128,8 +127,7 @@ Action extraction fixtures remain covered separately from authentication;
 synthetic Google/Proton strings are explicitly rejected by the runtime gate.
 The permanent confusion regressions run in required `npm run test:all` CI via
 `test:email-relay`. No migration or Worker credential is needed for this hotfix.
-Provider verification/link tests remain unavailable safely until recovery of
-trusted runtime proof. Manual Gmail UAT remains prohibited pending V5 closure.
+Gmail runtime provider proof is authorized only from raw-MIME cryptographic verification. Direct Gmail forwarding-verification evidence requires a SHA-256 Google DKIM signature from the exact `google.com` signing domain, a signed system `From` identity (`forwarding-noreply@google.com` or `mail-noreply@google.com`), and a signed `To` value matching the HMAC-protected relay recipient; direct DKIM never proves the forwarding path. Source attribution and link-test completion require a cryptographically valid SHA-256 Google ARC chain proving the forwarding path. The implementation uses the exactly pinned `mailauth@4.13.3` verifier, a committed frozen Deno lockfile, and a bounded TXT-only Cloudflare DoH resolver. Raw `Authentication-Results`, `Received-SPF`, provider hints, SHA-1 signatures and unvalidated ARC remain non-authoritative. Outlook and Proton remain fail-closed until provider-specific cryptographic evidence is added. Manual Gmail UAT remains prohibited until the remaining automated V5 gates close.
 
 Documentation reviewed 2026-09-09:
 - [Cloudflare inbound lifecycle](https://developers.cloudflare.com/email-service/concepts/email-lifecycle/)
@@ -139,5 +137,4 @@ Documentation reviewed 2026-09-09:
 
 The lifecycle documents authentication before Worker invocation, and analytics
 has verdicts. Neither establishes that arbitrary Worker headers have trusted
-provenance or binds analytics securely to the exact ingested message. Runtime
-signal is therefore INSUFFICIENT; no Analytics credential is added to production.
+provenance or binds analytics securely to the exact ingested message. Cloudflare's typed runtime signal remains insufficient by itself, so no Analytics credential is added to production; CapitalFlow independently verifies DKIM/ARC from the HMAC-protected raw MIME.
